@@ -19,6 +19,7 @@ import time
 import cv2
 import numpy as np
 import onnxruntime as ort
+import subprocess
 
 from config.settings import VEHICLE_CLASSES, CONFIDENCE_THRESHOLD
 from density.count_vehicles import count_vehicles
@@ -117,16 +118,42 @@ def postprocess(output, scale, pad_x, pad_y):
 
     return detections
 
+def get_youtube_stream_url(youtube_url):
+    try:
+        result = subprocess.run(
+            ["yt-dlp", "-f", "best[ext=mp4]", "-g", youtube_url],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except Exception as e:
+        print("Error extracting YouTube stream:", e)
+        return None
 
 def run(video_path, model_path, save_output=False):
-    session = ort.InferenceSession(model_path, providers=[ "CPUExecutionProvider"])
+    # session = ort.InferenceSession(model_path, providers=[ "CPUExecutionProvider"])
     
     # Enable for GPU or NPU 
-    # session = ort.InferenceSession(model_path, providers=["CoreMLExecutionProvider"])
+    session = ort.InferenceSession(model_path, providers=["CoreMLExecutionProvider"])
     
     input_name = session.get_inputs()[0].name
 
-    cap = cv2.VideoCapture(video_path)
+    # --- Video source selection (File OR YouTube) ---
+    if "youtube.com" in video_path or "youtu.be" in video_path:
+        print("YouTube link detected. Extracting stream...")
+        stream_url = get_youtube_stream_url(video_path)
+        
+        if stream_url is None:
+            print("Failed to extract YouTube stream.")
+            sys.exit(1)
+        
+        cap = cv2.VideoCapture(stream_url)
+    else:
+        cap = cv2.VideoCapture(video_path)
+
+    # cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"Error: cannot open video '{video_path}'")
         sys.exit(1)
