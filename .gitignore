@@ -1,2 +1,13 @@
 # Folders
 .venv
+
+# Model weights (large files)
+*.pt
+*.onnx
+*.h5
+
+# Downloaded Roboflow datasets
+traffic-analysis-with-yolov8-*/
+
+# API keys / secrets
+download_model.py
