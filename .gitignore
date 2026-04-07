@@ -1,13 +1,24 @@
 # Folders
 .venv
+__pycache__/
+*.pyc
 
 # Model weights (large files)
 *.pt
 *.onnx
 *.h5
 
-# Downloaded Roboflow datasets
+# Datasets (large, not tracked)
+dl/fine_tuning/datasets/
+dl/fine_tuning/dataset/
+dl/fine_tuning/merged/
+dl/fine_tuning/runs/
+dl/data/processed/
+dl/data/raw/
+dl/data/annotated/
+
+# Downloaded Roboflow datasets (old location)
 traffic-analysis-with-yolov8-*/
 
 # API keys / secrets
-download_model.py
+dl/detection/download_model.py
