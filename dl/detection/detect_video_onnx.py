@@ -133,9 +133,10 @@ def get_youtube_stream_url(youtube_url):
         return None
 
 def run(video_path, model_path, save_output=False):
-    # session = ort.InferenceSession(model_path, providers=[ "CPUExecutionProvider"])
-    
-    # Enable for GPU or NPU 
+    ort.set_default_logger_severity(3)
+    # session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+
+    # Enable for GPU or NPU
     session = ort.InferenceSession(model_path, providers=["CoreMLExecutionProvider"])
     
     input_name = session.get_inputs()[0].name
