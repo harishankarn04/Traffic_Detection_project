@@ -19,5 +19,3 @@ CONFIDENCE_THRESHOLD = 0.4
 # YOLOv8 model to use (auto-downloads on first run)
 # Options: yolov8n.pt (fastest), yolov8s.pt, yolov8m.pt (more accurate)
 MODEL_NAME = "yolov8n.pt"
-
-# MODEL_NAME = "yolov8s.pt"
