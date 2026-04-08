@@ -268,8 +268,8 @@ def process_visdrone():
 # ---------------------------------------------------------------------------
 def write_yaml():
     merged_yaml = {
-        "train": str((OUT_DIR / "train" / "images").resolve()),
-        "val":   str((OUT_DIR / "valid" / "images").resolve()),
+        "train": "train/images",
+        "val":   "valid/images",
         "nc":    len(UNIFIED_CLASSES),
         "names": UNIFIED_CLASSES,
     }
