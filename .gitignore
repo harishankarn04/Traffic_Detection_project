@@ -3,6 +3,10 @@
 __pycache__/
 *.pyc
 
+# macOS
+.DS_Store
+**/.DS_Store
+
 # Model weights (large files)
 *.pt
 *.onnx
