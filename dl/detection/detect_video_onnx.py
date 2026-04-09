@@ -29,7 +29,7 @@ from utils.visualization import draw_detections, draw_hud
 # LSTM predictor — loaded only if --lstm flag is passed
 _lstm_predictor = None
 
-INPUT_SIZE = 320
+INPUT_SIZE = 640
 NMS_THRESHOLD = 0.45
 
 
