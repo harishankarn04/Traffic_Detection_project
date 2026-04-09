@@ -24,7 +24,7 @@ if __name__ == "__main__":
         data=str(DATA_YAML),
         epochs=40,
         imgsz=640,
-        batch=8,        # safe for 6GB VRAM (RTX 4050)
+        batch=8,
         patience=10,    # early stopping
         augment=True,   # mosaic, flip, HSV — helps with CCTV angle variation
         device="cuda",  # NVIDIA GPU (change to "mps" for M1, "cpu" as fallback)
