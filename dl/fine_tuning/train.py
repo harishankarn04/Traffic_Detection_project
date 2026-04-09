@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     model.train(
         data=str(DATA_YAML),
-        epochs=50,
+        epochs=40,
         imgsz=640,
         batch=8,        # safe for 6GB VRAM (RTX 4050)
         patience=10,    # early stopping
