@@ -24,12 +24,12 @@ if __name__ == "__main__":
         data=str(DATA_YAML),
         epochs=50,
         imgsz=640,
-        batch=8,
+        batch=16,       # RTX 4050 6GB can handle 16; drop to 8 if OOM
         patience=10,    # early stopping
         augment=True,   # mosaic, flip, HSV — helps with CCTV angle variation
-        device="cuda",  # NVIDIA GPU (change to "mps" for M1, "cpu" as fallback)
-        cache=False,
-        workers=4,
+        device="cuda",
+        cache="disk",   # cache preprocessed images to disk — faster epoch iterations
+        workers=8,      # more CPU threads feeding GPU
         project=str(RUNS_DIR),
         name="yolov8n_traffic",
         exist_ok=True,
