@@ -23,7 +23,6 @@ from pathlib import Path
 
 BASE        = Path(__file__).parent
 DATASET_DIR = BASE / "dataset"
-PROJECT_ROOT = BASE.parent.parent   # Traffic_Detection_project/
 OUT_DIR     = BASE / "merged"
 SPLIT_RATIO = 0.85
 
@@ -44,9 +43,9 @@ DATASETS = {
             3: 2,   # truck
         }
     },
-    # Indian Emergency Vehicles — at project root
-    "emergency": {
-        "base": PROJECT_ROOT,
+    # Indian Emergency Vehicles
+    "Indian emergency vehicles.yolov8": {
+        "base": DATASET_DIR,
         "map": {
             # 24 classes — only keep vehicles we care about
             # ['Army','Vehicle','ambulance','ambulance_108','ambulance_SOL',
@@ -106,12 +105,8 @@ def add_sample(img_path: Path, label_lines: list[str], split: str, stem: str):
 
 
 def process_dataset(name: str, base: Path, class_map: dict):
-    if name == "emergency":
-        ds_dir = base   # dataset sits directly at project root
-        prefix = "emergency"
-    else:
-        ds_dir = base / name
-        prefix = name.replace(" ", "_").replace(".", "_")
+    ds_dir = base / name
+    prefix = name.replace(" ", "_").replace(".", "_")
 
     img_dir = ds_dir / "train" / "images"
     lbl_dir = ds_dir / "train" / "labels"
