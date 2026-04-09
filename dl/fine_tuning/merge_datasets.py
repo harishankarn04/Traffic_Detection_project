@@ -55,6 +55,13 @@ ROBOFLOW_MAPS = {
         4: None,    # tractor → skip
         5: 2,       # truck
     },
+    "Vehicle Detection.yolov8": {
+        # ['bus', 'car', 'motorbike', 'truck']
+        0: 1,   # bus
+        1: 0,   # car
+        2: 3,   # motorbike → motorcycle
+        3: 2,   # truck
+    },
     # Original Roboflow dataset sitting at dataset root (train/valid/test)
     "_root": {
         # ['bus', 'car', 'cng', 'truck']
@@ -291,6 +298,7 @@ if __name__ == "__main__":
     process_roboflow_train_only("CCTVv2.yolov8",                  ROBOFLOW_MAPS["CCTVv2.yolov8"])
     process_roboflow_train_only("UA-DETRAC-DATASET-10K.yolov8",   ROBOFLOW_MAPS["UA-DETRAC-DATASET-10K.yolov8"])
     process_roboflow_train_only("indian traffic.yolov8",          ROBOFLOW_MAPS["indian traffic.yolov8"])
+    process_roboflow_train_only("Vehicle Detection.yolov8",       ROBOFLOW_MAPS["Vehicle Detection.yolov8"])
 
     # Original Roboflow dataset (has train/valid/test)
     process_roboflow("_root", ROBOFLOW_MAPS["_root"])

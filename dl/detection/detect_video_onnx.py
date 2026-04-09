@@ -65,8 +65,8 @@ def postprocess(output, scale, pad_x, pad_y):
     """
     Convert raw YOLOv8 ONNX output to the common detection format.
 
-    YOLOv8 output shape: [1, 84, 8400]
-      84 = 4 (cx, cy, w, h) + 80 class scores
+    YOLOv8 output shape: [1, 9, 8400]
+      9 = 4 (cx, cy, w, h) + 5 class scores (car, bus, truck, motorcycle, auto_rickshaw)
       8400 = number of anchor candidates
 
     Returns:
