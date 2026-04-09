@@ -1,10 +1,13 @@
-# Fine-tuned model class IDs (car, bus, truck, motorcycle, auto_rickshaw)
+# Fine-tuned model class IDs
 VEHICLE_CLASSES = {
     0: "car",
     1: "bus",
     2: "truck",
     3: "motorcycle",
     4: "auto_rickshaw",
+    5: "ambulance",
+    6: "fire_truck",
+    7: "police",
 }
 
 # Vehicle count → Density level thresholds

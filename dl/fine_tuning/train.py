@@ -15,10 +15,10 @@ RUNS_DIR  = Path(__file__).parent / "runs"
 BEST_PT   = RUNS_DIR / "yolov8n_traffic" / "weights" / "best.pt"
 
 if __name__ == "__main__":
-    # Resume from previous best if available, else start from COCO pretrained
-    weights = str(BEST_PT) if BEST_PT.exists() else "yolov8n.pt"
-    print(f"Loading weights: {weights}")
-    model = YOLO(weights)
+    # NOTE: If number of classes changed, must use yolov8n.pt (not best.pt)
+    # best.pt can only be reused when class count stays the same
+    model = YOLO("yolov8n.pt")
+    print("Starting from yolov8n.pt (class count changed to 8)")
 
     model.train(
         data=str(DATA_YAML),
