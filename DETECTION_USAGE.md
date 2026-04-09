@@ -77,9 +77,28 @@ python detection/detect_video_onnx.py \
 
 ---
 
+## Setting Up on Raspberry Pi
+
+Model files are gitignored (too large for git) — copy them manually via USB or SCP:
+
+| File | Copy to |
+|------|---------|
+| `dl/yolov8n_traffic.onnx` | `dl/yolov8n_traffic.onnx` on RPi |
+| `dl/lstm.onnx` | `dl/lstm.onnx` on RPi (optional, only when LSTM training done) |
+
+Everything else comes via `git clone`:
+```bash
+git clone https://github.com/harishankarn04/Traffic_Detection_project.git
+cd Traffic_Detection_project
+pip install -r dl/requirements_rpi.txt
+```
+
+---
+
 ## Notes
 
 - Press `q` to quit when display is shown
+- Use `--headless` on RPi with VNC (no physical display)
 - Videos can be placed in `dl/data/raw/` (gitignored, won't be committed)
 - `yt-dlp` must be installed for YouTube streams: `pip install yt-dlp`
 - ONNX provider is auto-selected: CoreML on Mac, CPU on RPi
