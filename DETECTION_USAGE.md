@@ -96,6 +96,20 @@ Rename output to `yolov8n_traffic_320.onnx`.
 > **Important:** `INPUT_SIZE` in `detect_video_onnx.py` must match the model's export size.
 > 640 model → `INPUT_SIZE = 640`, 320 model → `INPUT_SIZE = 320`
 
+### INT8 Quantization — faster on RPi CPU (optional)
+
+Converts float32 weights → INT8. ~2x faster, ~4x smaller, ~1-2% accuracy drop. No code changes needed.
+
+Run on Mac/laptop after exporting ONNX:
+```bash
+python -c "
+from onnxruntime.quantization import quantize_dynamic, QuantType
+quantize_dynamic('yolov8n_traffic.onnx', 'yolov8n_traffic_int8.onnx', weight_type=QuantType.QUInt8)
+"
+```
+
+Copy `yolov8n_traffic_int8.onnx` to RPi and use with `--model yolov8n_traffic_int8.onnx`. `INPUT_SIZE` stays at 640.
+
 ---
 
 ## Setting Up on Raspberry Pi
