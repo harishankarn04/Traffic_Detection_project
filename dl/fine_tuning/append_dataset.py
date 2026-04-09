@@ -115,7 +115,8 @@ def process_dataset(name: str, base: Path, class_map: dict):
         print(f"  SKIP {name}: {img_dir} not found")
         return 0, 0
 
-    images = sorted(img_dir.glob("*.*"))
+    VALID_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
+    images = sorted(f for f in img_dir.glob("*.*") if f.suffix.lower() in VALID_EXTS)
     random.shuffle(images)
     split_idx = int(len(images) * SPLIT_RATIO)
 
