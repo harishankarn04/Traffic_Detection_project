@@ -1,4 +1,4 @@
-# ⚙️ RTOS Project
+# RTOS Project
 
 ## 1. Title
 **Adaptive Traffic Control System (ATCS) with Real-Time Priority Scheduling and Emergency Response**
@@ -7,7 +7,7 @@
 
 ## 2. Overview
 
-This project implements an Adaptive Traffic Control System (ATCS) using FreeRTOS on STM32H7. Unlike fixed-timer systems, ATCS adjusts signal timing based on real-time traffic density. The system acts as the "brain and hands" - it receives traffic information from Raspberry Pi, makes control decisions, and physically controls the LED traffic signals. It guarantees fast emergency response (<50ms) through interrupt handling and priority-based task scheduling.
+This project implements an Adaptive Traffic Control System (ATCS) using FreeRTOS on ESP32. Unlike fixed-timer systems, ATCS adjusts signal timing based on real-time traffic density. The system acts as the "brain and hands" - it receives traffic information from Raspberry Pi, makes control decisions, and physically controls the LED traffic signals. It guarantees fast emergency response (<50ms) through interrupt handling and priority-based task scheduling.
 
 ---
 
@@ -25,15 +25,15 @@ This project implements an Adaptive Traffic Control System (ATCS) using FreeRTOS
 ## 4. Tools Used
 
 **Hardware:**
-- WeAct STM32H743VI - Main microcontroller
+- ESP32 DevKit - Main microcontroller
 - RGB LEDs (6-8 units) - Traffic signals
 - Push Button - Emergency trigger
 - Breadboard & wires
 
 **Software:**
-- FreeRTOS - Real-time operating system
-- STM32CubeIDE - Development environment
-- ST-Link - Programming/debugging
+- FreeRTOS (via ESP-IDF) - Real-time operating system
+- ESP-IDF - Development framework
+- VS Code + ESP-IDF extension - Development environment
 
 ---
 
@@ -66,49 +66,45 @@ This project implements an Adaptive Traffic Control System (ATCS) using FreeRTOS
 
 ## 6. Communication Between Boards
 
-**Connection: Raspberry Pi → STM32H7**
+**Connection: Raspberry Pi → ESP32**
 
 **Method:** UART (Serial)
 - Baud rate: 115200 bps
-- Wiring: RPi GPIO14 → STM32 PA10 (RX), RPi GPIO15 ← STM32 PA9 (TX), Ground connected
+- Wiring: RPi GPIO14 (TX) → ESP32 GPIO16 (RX), RPi GPIO15 (RX) ← ESP32 GPIO17 (TX), Ground connected
 - Updates every 2-3 seconds
-- RPi sends traffic data, STM32 receives and controls signals
+- RPi sends traffic data, ESP32 receives and controls signals
 
 ---
 
 ## 7. Input/Output Data Format
 
-**Input to STM32 (JSON from Raspberry Pi):**
+**Input to ESP32 (JSON from Raspberry Pi):**
 ```json
 {
-  "vehicle_counts": {
-    "north": 15,
-    "south": 8,
-    "east": 22,
-    "west": 12
-  },
-  "density_level": "HIGH"
+  "vehicle_count": 15,
+  "current_density": "HIGH",
+  "predicted_density": "CONGESTED"
 }
 ```
 
-**Output from STM32:**
+**Output from ESP32:**
 - Physical: Controls 6 RGB LEDs (Red/Yellow/Green for North-South and East-West)
 - States: LED ON (signal active) or OFF
 - Emergency button input triggers hardware interrupt
 
 ---
 
-## 8. Concepts Learned
+## 8. Concepts Demonstrated
 
 **RTOS Fundamentals:**
 - Task scheduling and priority management
-- Preemptive vs cooperative scheduling
+- Preemptive scheduling
 - Context switching
 
 **Interrupt Handling:**
 - Hardware interrupts and ISR design
 - Fast response times (<50ms)
-- ISR-to-task communication
+- ISR-to-task communication via semaphore
 
 **Inter-Process Communication:**
 - Semaphores for signaling
@@ -117,8 +113,7 @@ This project implements an Adaptive Traffic Control System (ATCS) using FreeRTOS
 
 **Real-Time Constraints:**
 - Deterministic timing
-- Worst-case execution time (WCET)
-- Meeting deadlines
+- Adaptive green time based on density
 
 **Hardware Integration:**
 - GPIO control for LEDs
@@ -128,36 +123,30 @@ This project implements an Adaptive Traffic Control System (ATCS) using FreeRTOS
 **System Reliability:**
 - Watchdog timers
 - Fail-safe mechanisms
-- Error handling
 
 ---
 
-## 🔗 Useful Resources
+## 9. Project Structure
 
-**RTOS Frameworks:**
-- FreeRTOS: https://www.freertos.org/
-- Zephyr RTOS: https://zephyrproject.org/
-- CMSIS-RTOS: https://arm-software.github.io/CMSIS_5/
-
-**Development Boards:**
-- STM32 Nucleo: https://www.st.com/en/evaluation-tools/stm32-nucleo-boards.html
-- WeAct Studio STM32: https://github.com/WeActStudio
-
-**Development Tools:**
-- STM32CubeIDE: https://www.st.com/en/development-tools/stm32cubeide.html
-- SEGGER SystemView: https://www.segger.com/products/development-tools/systemview/
-
-**Learning Resources:**
-- FreeRTOS Tutorials: https://www.freertos.org/tutorial/
-- Embedded Systems Course: https://www.edx.org/learn/embedded-systems
-- Real-Time Systems Book: "Real-Time Systems" by Jane W. S. Liu
+```
+rtos/
+├── main/
+│   ├── main.c                  # Entry point, task creation, FreeRTOS scheduler
+│   ├── emergency_handler.c     # Priority 5 — ISR + emergency task
+│   ├── signal_controller.c     # Priority 4 — adaptive signal timing
+│   ├── density_reader.c        # Priority 3 — UART RX from RPi, JSON parse
+│   ├── junction_sync.c         # Priority 2 — multi-junction coordination
+│   └── display_monitor.c       # Priority 1 — serial logging
+├── components/
+│   └── uart_parser/            # Lightweight JSON parser for density data
+└── CMakeLists.txt
+```
 
 ---
 
-## 📚 References
+## Useful Resources
 
-1. Richard Barry, "Mastering the FreeRTOS Real Time Kernel", 2016
-2. Giorgio Buttazzo, "Hard Real-Time Computing Systems", Springer, 2011
-3. Liu & Layland, "Scheduling Algorithms for Multiprogramming in a Hard-Real-Time Environment", JACM 1973
-4. STM32H7 Reference Manual, STMicroelectronics
-5. ARM Cortex-M7 Technical Reference Manual, ARM Limited
+- ESP-IDF FreeRTOS: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/freertos.html
+- ESP32 GPIO: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/gpio.html
+- ESP32 UART: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/uart.html
+- FreeRTOS Official Docs: https://www.freertos.org/
