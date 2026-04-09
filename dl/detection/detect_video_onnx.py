@@ -135,7 +135,7 @@ def get_youtube_stream_url(youtube_url):
         print("Error extracting YouTube stream:", e)
         return None
 
-def run(video_path, model_path, save_output=False, lstm_path=None):
+def run(video_path, model_path, save_output=False, lstm_path=None, serial_port=None):
     global _lstm_predictor
     ort.set_default_logger_severity(3)
 
@@ -144,6 +144,13 @@ def run(video_path, model_path, save_output=False, lstm_path=None):
         from prediction.lstm_predict import LSTMPredictor
         _lstm_predictor = LSTMPredictor(lstm_path)
         print(f"LSTM predictor loaded: {lstm_path}")
+
+    # Open serial port to ESP32 if specified
+    ser = None
+    if serial_port:
+        import serial
+        ser = serial.Serial(serial_port, 115200, timeout=1)
+        print(f"Serial port opened: {serial_port}")
 
     # session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
 
@@ -181,6 +188,7 @@ def run(video_path, model_path, save_output=False, lstm_path=None):
         print(f"Saving annotated video to: {out_path}")
 
     prev_time = time.time()
+    last_serial_time = 0
 
     while True:
         ret, frame = cap.read()
@@ -209,6 +217,16 @@ def run(video_path, model_path, save_output=False, lstm_path=None):
 
         print(json.dumps(output))
 
+        # Send to ESP32 via UART every 2 seconds
+        if ser and (curr_time - last_serial_time >= 2.0):
+            payload = json.dumps({
+                "vehicle_count":      output["vehicle_count"],
+                "current_density":    output["current_density"],
+                "predicted_density":  output["predicted_density"] or "LOW",
+            }) + "\n"
+            ser.write(payload.encode())
+            last_serial_time = curr_time
+
         cv2.imshow("Traffic Detection (ONNX)", frame)
 
         if writer:
@@ -220,6 +238,8 @@ def run(video_path, model_path, save_output=False, lstm_path=None):
     cap.release()
     if writer:
         writer.release()
+    if ser:
+        ser.close()
     cv2.destroyAllWindows()
 
 
@@ -229,6 +249,7 @@ if __name__ == "__main__":
     parser.add_argument("--model", required=True, help="Path to ONNX model file (yolov8n.onnx)")
     parser.add_argument("--save", action="store_true", help="Save annotated output video")
     parser.add_argument("--lstm", default=None, help="Path to LSTM ONNX model (optional)")
+    parser.add_argument("--serial", default=None, help="Serial port to ESP32 (e.g. /dev/serial0)")
     args = parser.parse_args()
 
-    run(args.video, args.model, save_output=args.save, lstm_path=args.lstm)
+    run(args.video, args.model, save_output=args.save, lstm_path=args.lstm, serial_port=args.serial)
