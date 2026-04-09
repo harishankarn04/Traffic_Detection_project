@@ -135,7 +135,7 @@ def get_youtube_stream_url(youtube_url):
         print("Error extracting YouTube stream:", e)
         return None
 
-def run(video_path, model_path, save_output=False, lstm_path=None, serial_port=None):
+def run(video_path, model_path, save_output=False, lstm_path=None, serial_port=None, headless=False):
     global _lstm_predictor
     ort.set_default_logger_severity(3)
 
@@ -152,10 +152,13 @@ def run(video_path, model_path, save_output=False, lstm_path=None, serial_port=N
         ser = serial.Serial(serial_port, 115200, timeout=1)
         print(f"Serial port opened: {serial_port}")
 
-    # session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
-
-    # Enable for GPU or NPU
-    session = ort.InferenceSession(model_path, providers=["CoreMLExecutionProvider"])
+    # Auto-select best available provider: CoreML (M1) → CPU (RPi/others)
+    available = [p.lower() for p in ort.get_available_providers()]
+    if "coremlexecutionprovider" in available:
+        providers = ["CoreMLExecutionProvider"]
+    else:
+        providers = ["CPUExecutionProvider"]
+    session = ort.InferenceSession(model_path, providers=providers)
     
     input_name = session.get_inputs()[0].name
 
@@ -227,13 +230,13 @@ def run(video_path, model_path, save_output=False, lstm_path=None, serial_port=N
             ser.write(payload.encode())
             last_serial_time = curr_time
 
-        cv2.imshow("Traffic Detection (ONNX)", frame)
+        if not headless:
+            cv2.imshow("Traffic Detection (ONNX)", frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
         if writer:
             writer.write(frame)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
 
     cap.release()
     if writer:
@@ -250,6 +253,7 @@ if __name__ == "__main__":
     parser.add_argument("--save", action="store_true", help="Save annotated output video")
     parser.add_argument("--lstm", default=None, help="Path to LSTM ONNX model (optional)")
     parser.add_argument("--serial", default=None, help="Serial port to ESP32 (e.g. /dev/serial0)")
+    parser.add_argument("--headless", action="store_true", help="Run without display (use on RPi)")
     args = parser.parse_args()
 
-    run(args.video, args.model, save_output=args.save, lstm_path=args.lstm, serial_port=args.serial)
+    run(args.video, args.model, save_output=args.save, lstm_path=args.lstm, serial_port=args.serial, headless=args.headless)
