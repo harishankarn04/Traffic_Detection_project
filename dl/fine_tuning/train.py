@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     model.train(
         data=str(DATA_YAML),
-        epochs=40,
+        epochs=50,
         imgsz=640,
         batch=8,
         patience=10,    # early stopping
