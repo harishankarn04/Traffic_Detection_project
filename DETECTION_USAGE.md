@@ -77,6 +77,27 @@ python detection/detect_video_onnx.py \
 
 ---
 
+## Exporting ONNX from best.pt
+
+Run from `dl/` after training completes.
+
+### 640px — full accuracy (laptop/Mac)
+```bash
+python -c "from ultralytics import YOLO; YOLO('fine_tuning/runs/yolov8n_traffic/weights/best.pt').export(format='onnx', imgsz=640, simplify=True)"
+```
+Rename output to `yolov8n_traffic.onnx`.
+
+### 320px — faster inference (RPi)
+```bash
+python -c "from ultralytics import YOLO; YOLO('fine_tuning/runs/yolov8n_traffic/weights/best.pt').export(format='onnx', imgsz=320, simplify=True)"
+```
+Rename output to `yolov8n_traffic_320.onnx`.
+
+> **Important:** `INPUT_SIZE` in `detect_video_onnx.py` must match the model's export size.
+> 640 model → `INPUT_SIZE = 640`, 320 model → `INPUT_SIZE = 320`
+
+---
+
 ## Setting Up on Raspberry Pi
 
 Model files are gitignored (too large for git) — copy them manually via USB or SCP:
