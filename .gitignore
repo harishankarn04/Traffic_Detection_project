@@ -26,3 +26,6 @@ traffic-analysis-with-yolov8-*/
 
 # API keys / secrets
 dl/detection/download_model.py
+
+# Windows error logs
+windows_error
