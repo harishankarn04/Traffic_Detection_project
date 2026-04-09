@@ -26,6 +26,9 @@ from density.count_vehicles import count_vehicles
 from density.density_logic import build_output
 from utils.visualization import draw_detections, draw_hud
 
+# LSTM predictor — loaded only if --lstm flag is passed
+_lstm_predictor = None
+
 INPUT_SIZE = 640
 NMS_THRESHOLD = 0.45
 
@@ -132,8 +135,16 @@ def get_youtube_stream_url(youtube_url):
         print("Error extracting YouTube stream:", e)
         return None
 
-def run(video_path, model_path, save_output=False):
+def run(video_path, model_path, save_output=False, lstm_path=None):
+    global _lstm_predictor
     ort.set_default_logger_severity(3)
+
+    # Load LSTM predictor if model path provided
+    if lstm_path:
+        from prediction.lstm_predict import LSTMPredictor
+        _lstm_predictor = LSTMPredictor(lstm_path)
+        print(f"LSTM predictor loaded: {lstm_path}")
+
     # session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
 
     # Enable for GPU or NPU
@@ -181,7 +192,13 @@ def run(video_path, model_path, save_output=False):
         detections = postprocess(raw_output, scale, pad_x, pad_y)
 
         count = count_vehicles(detections)
-        output = build_output(count)
+
+        predicted = None
+        if _lstm_predictor:
+            _lstm_predictor.update(count)
+            predicted = _lstm_predictor.predict()
+
+        output = build_output(count, predicted)
 
         curr_time = time.time()
         fps = 1.0 / (curr_time - prev_time + 1e-6)
@@ -211,6 +228,7 @@ if __name__ == "__main__":
     parser.add_argument("--video", required=True, help="Path to input video file")
     parser.add_argument("--model", required=True, help="Path to ONNX model file (yolov8n.onnx)")
     parser.add_argument("--save", action="store_true", help="Save annotated output video")
+    parser.add_argument("--lstm", default=None, help="Path to LSTM ONNX model (optional)")
     args = parser.parse_args()
 
-    run(args.video, args.model, save_output=args.save)
+    run(args.video, args.model, save_output=args.save, lstm_path=args.lstm)
