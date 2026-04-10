@@ -182,6 +182,13 @@ void taskDensityReader(void* pvParams) {
             DeserializationError err = deserializeJson(doc, line);
 
             if (!err) {
+                bool emergency_from_cam = doc["emergency"] | false;
+
+                // Trigger emergency semaphore if camera detected emergency vehicle
+                if (emergency_from_cam) {
+                    xSemaphoreGive(xEmergencySem);
+                }
+
                 if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
                     trafficData.vehicle_count = doc["vehicle_count"] | 0;
 
@@ -192,10 +199,11 @@ void taskDensityReader(void* pvParams) {
                     strncpy(trafficData.predicted_density, pd, sizeof(trafficData.predicted_density));
 
                     xSemaphoreGive(xMutex);
-                    Serial.printf("[UART] count=%d current=%s predicted=%s\n",
+                    Serial.printf("[UART] count=%d current=%s predicted=%s emergency=%s\n",
                         trafficData.vehicle_count,
                         trafficData.current_density,
-                        trafficData.predicted_density);
+                        trafficData.predicted_density,
+                        emergency_from_cam ? "YES" : "NO");
                 }
             } else {
                 Serial.printf("[UART] Parse error: %s\n", line.c_str());

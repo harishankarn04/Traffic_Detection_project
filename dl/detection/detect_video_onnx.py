@@ -192,15 +192,31 @@ def run(video_path, model_path, save_output=False, lstm_path=None, serial_port=N
 
     prev_time = time.time()
     last_serial_time = 0
+    frame_idx = 0
+    SKIP_FRAMES = 2          # run inference every Nth frame
+    EMERGENCY_CLASSES = {5, 6, 7}  # ambulance, fire_truck, police
+
+    detections = []          # carry last detections on skipped frames
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        tensor, scale, pad_x, pad_y = preprocess(frame)
-        raw_output = session.run(None, {input_name: tensor})[0]
-        detections = postprocess(raw_output, scale, pad_x, pad_y)
+        frame_idx += 1
+
+        # Always run inference on emergency check frames, skip others for density
+        if frame_idx % SKIP_FRAMES == 0:
+            tensor, scale, pad_x, pad_y = preprocess(frame)
+            raw_output = session.run(None, {input_name: tensor})[0]
+            detections = postprocess(raw_output, scale, pad_x, pad_y)
+
+        # Check for emergency vehicles every frame regardless of skip
+        emergency_detected = any(d["cls"] in EMERGENCY_CLASSES for d in detections)
+        if emergency_detected and frame_idx % SKIP_FRAMES != 0:
+            tensor, scale, pad_x, pad_y = preprocess(frame)
+            raw_output = session.run(None, {input_name: tensor})[0]
+            detections = postprocess(raw_output, scale, pad_x, pad_y)
 
         count = count_vehicles(detections)
 
@@ -220,12 +236,13 @@ def run(video_path, model_path, save_output=False, lstm_path=None, serial_port=N
 
         print(json.dumps(output))
 
-        # Send to ESP32 via UART every 2 seconds
-        if ser and (curr_time - last_serial_time >= 2.0):
+        # Send to ESP32 via UART every 2 seconds, or immediately on emergency
+        if ser and (emergency_detected or curr_time - last_serial_time >= 2.0):
             payload = json.dumps({
                 "vehicle_count":      output["vehicle_count"],
                 "current_density":    output["current_density"],
                 "predicted_density":  output["predicted_density"] or "LOW",
+                "emergency":          emergency_detected,
             }) + "\n"
             ser.write(payload.encode())
             last_serial_time = curr_time
