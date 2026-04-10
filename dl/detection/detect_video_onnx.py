@@ -192,31 +192,18 @@ def run(video_path, model_path, save_output=False, lstm_path=None, serial_port=N
 
     prev_time = time.time()
     last_serial_time = 0
-    frame_idx = 0
-    SKIP_FRAMES = 2          # run inference every Nth frame
     EMERGENCY_CLASSES = {5, 6, 7}  # ambulance, fire_truck, police
-
-    detections = []          # carry last detections on skipped frames
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        frame_idx += 1
+        tensor, scale, pad_x, pad_y = preprocess(frame)
+        raw_output = session.run(None, {input_name: tensor})[0]
+        detections = postprocess(raw_output, scale, pad_x, pad_y)
 
-        # Always run inference on emergency check frames, skip others for density
-        if frame_idx % SKIP_FRAMES == 0:
-            tensor, scale, pad_x, pad_y = preprocess(frame)
-            raw_output = session.run(None, {input_name: tensor})[0]
-            detections = postprocess(raw_output, scale, pad_x, pad_y)
-
-        # Check for emergency vehicles every frame regardless of skip
         emergency_detected = any(d["cls"] in EMERGENCY_CLASSES for d in detections)
-        if emergency_detected and frame_idx % SKIP_FRAMES != 0:
-            tensor, scale, pad_x, pad_y = preprocess(frame)
-            raw_output = session.run(None, {input_name: tensor})[0]
-            detections = postprocess(raw_output, scale, pad_x, pad_y)
 
         count = count_vehicles(detections)
 
