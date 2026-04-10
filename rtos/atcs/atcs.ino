@@ -173,10 +173,17 @@ void taskSignalController(void* pvParams) {
 void taskDensityReader(void* pvParams) {
     String line;
 
+    // Flush any garbage on the line before reading valid JSON
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    while (Serial2.available()) Serial2.read();
+
     while (true) {
         if (Serial2.available()) {
             line = Serial2.readStringUntil('\n');
             line.trim();
+
+            // Skip lines that don't look like JSON
+            if (line.length() == 0 || line[0] != '{') continue;
 
             StaticJsonDocument<256> doc;
             DeserializationError err = deserializeJson(doc, line);
