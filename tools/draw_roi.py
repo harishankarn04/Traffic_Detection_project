@@ -1,13 +1,26 @@
 """
 draw_roi.py — Interactive ROI zone drawing tool for lane-wise vehicle detection.
 
-Run once per camera to define approach zones. Saves zones to a JSON file
+Run once per camera/video to define approach zones. Saves zones to a JSON file
 that detect_video_onnx.py reads for per-zone counting.
 
+Output structure:
+    tools/roi/video/       — lane maps for local video files
+    tools/roi/stream/      — lane maps for live streams (YouTube, RTSP, etc.)
+
+Naming:
+    Video:  tools/roi/video/<vidname>_laneMap.json
+    Stream: tools/roi/stream/<streamname>_laneMap.json
+
 Usage:
-    python tools/draw_roi.py --source data/raw/video.mp4
-    python tools/draw_roi.py --source 0                        # webcam
-    python tools/draw_roi.py --source data/raw/video.mp4 --output zones.json
+    # Local video
+    python tools/draw_roi.py --source dl/data/raw/traffic_cam1.mp4
+
+    # YouTube live stream
+    python tools/draw_roi.py --source 'https://www.youtube.com/live/6dp-bvQ7RWo'
+
+    # Custom name override
+    python tools/draw_roi.py --source dl/data/raw/traffic_cam1.mp4 --name junction_A
 
 Controls:
     - Click points to draw a polygon (min 3 points)
@@ -20,9 +33,15 @@ Controls:
 
 import argparse
 import json
+import re
+import subprocess
 import cv2
 import numpy as np
 from pathlib import Path
+
+TOOLS_DIR = Path(__file__).parent
+ROI_VIDEO_DIR = TOOLS_DIR / "roi" / "video"
+ROI_STREAM_DIR = TOOLS_DIR / "roi" / "stream"
 
 points = []
 zones = {}
@@ -37,6 +56,74 @@ COLORS = [
     (0, 255, 255),  # yellow
     (255, 0, 255),  # magenta
 ]
+
+
+def is_stream(source: str) -> bool:
+    """Check if source is a live stream URL."""
+    return any(x in source for x in ["youtube.com", "youtu.be", "rtsp://", "http://", "https://"])
+
+
+def is_youtube(source: str) -> bool:
+    return "youtube.com" in source or "youtu.be" in source
+
+
+def get_youtube_stream_url(url: str) -> str | None:
+    """Extract direct stream URL via yt-dlp."""
+    try:
+        result = subprocess.run(
+            ["yt-dlp", "-f", "best[height<=720]", "-g", url],
+            capture_output=True, text=True, timeout=30,
+        )
+        stream = result.stdout.strip()
+        return stream if stream else None
+    except Exception as e:
+        print(f"yt-dlp error: {e}")
+        return None
+
+
+def get_youtube_title(url: str) -> str:
+    """Extract YouTube video title for naming."""
+    try:
+        result = subprocess.run(
+            ["yt-dlp", "--get-title", url],
+            capture_output=True, text=True, timeout=15,
+        )
+        title = result.stdout.strip()
+        # Clean title to filesystem-safe name
+        title = re.sub(r'[^\w\s-]', '', title)
+        title = re.sub(r'[\s]+', '_', title).strip('_')
+        return title[:50] if title else "stream"
+    except Exception:
+        return "stream"
+
+
+def get_stream_name(source: str) -> str:
+    """Derive a name from a stream URL."""
+    if is_youtube(source):
+        return get_youtube_title(source)
+    # For RTSP or other URLs, use host + path
+    cleaned = source.split("//")[-1]
+    cleaned = re.sub(r'[^\w\s-]', '_', cleaned).strip('_')
+    return cleaned[:50] if cleaned else "stream"
+
+
+def grab_frame(source: str):
+    """Get first frame from video or stream."""
+    actual_source = source
+
+    if is_youtube(source):
+        print("YouTube link detected. Extracting stream...")
+        stream_url = get_youtube_stream_url(source)
+        if not stream_url:
+            print("Failed to extract YouTube stream.")
+            return None
+        actual_source = stream_url
+
+    cap = cv2.VideoCapture(actual_source)
+    ret, frame = cap.read()
+    cap.release()
+
+    return frame if ret else None
 
 
 def mouse_callback(event, x, y, flags, param):
@@ -85,18 +172,37 @@ def main():
     global points, frame_display, frame_clean
 
     parser = argparse.ArgumentParser(description="Draw ROI zones for lane-wise detection")
-    parser.add_argument("--source", required=True, help="Video file path or camera index")
-    parser.add_argument("--output", default="zones.json", help="Output JSON path (default: zones.json)")
+    parser.add_argument("--source", required=True, help="Video file path or stream URL (YouTube, RTSP)")
+    parser.add_argument("--name", default=None, help="Custom name override for the lane map file")
     args = parser.parse_args()
 
-    # Get first frame
-    source = int(args.source) if args.source.isdigit() else args.source
-    cap = cv2.VideoCapture(source)
-    ret, frame = cap.read()
-    cap.release()
+    # Create output directories
+    ROI_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+    ROI_STREAM_DIR.mkdir(parents=True, exist_ok=True)
 
-    if not ret:
-        print(f"Error: cannot read from '{args.source}'")
+    # Determine source type, output path, and name
+    source = args.source
+    stream = is_stream(source)
+
+    if args.name:
+        map_name = args.name
+    elif stream:
+        map_name = get_stream_name(source)
+    else:
+        map_name = Path(source).stem
+
+    if stream:
+        out_path = ROI_STREAM_DIR / f"{map_name}_laneMap.json"
+    else:
+        out_path = ROI_VIDEO_DIR / f"{map_name}_laneMap.json"
+
+    print(f"Source type: {'stream' if stream else 'video'}")
+    print(f"Lane map will save to: {out_path}")
+
+    # Grab first frame
+    frame = grab_frame(source)
+    if frame is None:
+        print(f"Error: cannot read from '{source}'")
         return
 
     frame_clean = frame.copy()
@@ -137,9 +243,13 @@ def main():
             if not zones:
                 print("No zones to save")
                 continue
-            out_path = Path(args.output)
+
+            # Save zone JSON
             with open(out_path, "w") as f:
-                json.dump(zones, f, indent=2)
+                json.dump({
+                    "source": source,
+                    "zones": zones,
+                }, f, indent=2)
             print(f"\nSaved {len(zones)} zones to {out_path}")
             break
 
