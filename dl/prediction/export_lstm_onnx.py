@@ -33,6 +33,7 @@ torch.onnx.export(
     output_names=["output"],
     dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
     opset_version=12,
+    dynamo=False,  # force legacy exporter, no onnxscript needed
 )
 
 print(f"Exported → {ONNX_PATH}")
