@@ -168,6 +168,15 @@ def redraw():
 
 def prompt_zone_info() -> dict | None:
     """Prompt user in terminal for zone metadata."""
+    # Flush any buffered stdin from OpenCV keypresses
+    import time
+    time.sleep(0.3)
+    try:
+        import sys, termios
+        termios.tcflush(sys.stdin, termios.TCIOFLUSH)
+    except (ImportError, AttributeError):
+        pass
+
     print("\n--- Zone Setup ---")
     print("Zone types: approaching, leaving, middle")
     zone_type = input("Type (approaching/leaving/middle): ").strip().lower()
