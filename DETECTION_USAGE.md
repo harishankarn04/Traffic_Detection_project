@@ -112,6 +112,52 @@ Copy `yolov8n_traffic_int8.onnx` to RPi and use with `--model yolov8n_traffic_in
 
 ---
 
+## ROI Lane Map Tool
+
+Draw polygon zones on a video/stream frame to define lanes per approach direction.
+Zones are saved as JSON for per-lane vehicle counting.
+
+Run from **project root**:
+
+### Local video
+```bash
+python tools/draw_roi.py --source dl/data/raw/traffic_cam1.mp4
+# saves → tools/roi/video/traffic_cam1_laneMap.json
+```
+
+### YouTube live stream
+```bash
+python tools/draw_roi.py --source 'https://www.youtube.com/live/6dp-bvQ7RWo'
+# saves → tools/roi/stream/<video_title>_laneMap.json
+```
+
+### Custom name
+```bash
+python tools/draw_roi.py --source dl/data/raw/video.mp4 --name junction_A
+# saves → tools/roi/video/junction_A_laneMap.json
+```
+
+### Controls
+| Key | Action |
+|-----|--------|
+| Click | Add polygon point |
+| `n` | Finish zone, enter name (e.g. north, south) |
+| `r` | Reset current zone |
+| `d` | Delete last saved zone |
+| `s` | Save all zones to JSON and exit |
+| `q` | Quit without saving |
+
+### Output structure
+```
+tools/roi/
+├── video/          ← lane maps for local video files
+│   └── traffic_cam1_laneMap.json
+└── stream/         ← lane maps for live streams
+    └── NYC_Traffic_Live_laneMap.json
+```
+
+---
+
 ## Setting Up on Raspberry Pi
 
 Model files are gitignored (too large for git) — copy them manually via USB or SCP:
