@@ -12,23 +12,23 @@ Naming:
     Video:  tools/roi/video/<vidname>_laneMap.json
     Stream: tools/roi/stream/<streamname>_laneMap.json
 
+Zone types:
+    - direction lanes: e.g. "north_approaching_lane1", "south_leaving_lane2"
+    - middle zone: roundabout or normal junction center
+
 Usage:
-    # Local video
     python tools/draw_roi.py --source dl/data/raw/traffic_cam1.mp4
-
-    # YouTube live stream
     python tools/draw_roi.py --source 'https://www.youtube.com/live/6dp-bvQ7RWo'
-
-    # Custom name override
     python tools/draw_roi.py --source dl/data/raw/traffic_cam1.mp4 --name junction_A
 
 Controls:
-    - Click points to draw a polygon (min 3 points)
-    - Press 'n' to finish current zone and name it
-    - Press 'r' to reset current zone
-    - Press 'd' to delete last saved zone
-    - Press 's' to save all zones to JSON and exit
-    - Press 'q' to quit without saving
+    - Click       — add polygon point
+    - 'u'         — undo last point
+    - 'n'         — finish zone and name it (prompted in terminal)
+    - 'r'         — reset current zone
+    - 'd'         — delete last saved zone
+    - 's'         — save all zones to JSON and exit
+    - 'q'         — quit without saving
 """
 
 import argparse
@@ -44,22 +44,22 @@ ROI_VIDEO_DIR = TOOLS_DIR / "roi" / "video"
 ROI_STREAM_DIR = TOOLS_DIR / "roi" / "stream"
 
 points = []
-zones = {}
+zones = {}       # flat dict: zone_name → {"points": [...], "type": ..., "direction": ..., "lane": ...}
 frame_display = None
 frame_clean = None
 
-COLORS = [
-    (0, 255, 0),    # green
-    (255, 0, 0),    # blue
-    (0, 0, 255),    # red
-    (255, 255, 0),  # cyan
-    (0, 255, 255),  # yellow
-    (255, 0, 255),  # magenta
-]
+# Colors per direction
+DIR_COLORS = {
+    "north": (0, 255, 0),      # green
+    "south": (0, 0, 255),      # red
+    "east":  (255, 255, 0),    # cyan
+    "west":  (0, 255, 255),    # yellow
+    "middle": (255, 0, 255),   # magenta
+}
+FALLBACK_COLOR = (200, 200, 200)
 
 
 def is_stream(source: str) -> bool:
-    """Check if source is a live stream URL."""
     return any(x in source for x in ["youtube.com", "youtu.be", "rtsp://", "http://", "https://"])
 
 
@@ -68,7 +68,6 @@ def is_youtube(source: str) -> bool:
 
 
 def get_youtube_stream_url(url: str) -> str | None:
-    """Extract direct stream URL via yt-dlp."""
     try:
         result = subprocess.run(
             ["yt-dlp", "-f", "best[height<=720]", "-g", url],
@@ -82,14 +81,12 @@ def get_youtube_stream_url(url: str) -> str | None:
 
 
 def get_youtube_title(url: str) -> str:
-    """Extract YouTube video title for naming."""
     try:
         result = subprocess.run(
             ["yt-dlp", "--get-title", url],
             capture_output=True, text=True, timeout=15,
         )
         title = result.stdout.strip()
-        # Clean title to filesystem-safe name
         title = re.sub(r'[^\w\s-]', '', title)
         title = re.sub(r'[\s]+', '_', title).strip('_')
         return title[:50] if title else "stream"
@@ -98,19 +95,15 @@ def get_youtube_title(url: str) -> str:
 
 
 def get_stream_name(source: str) -> str:
-    """Derive a name from a stream URL."""
     if is_youtube(source):
         return get_youtube_title(source)
-    # For RTSP or other URLs, use host + path
     cleaned = source.split("//")[-1]
     cleaned = re.sub(r'[^\w\s-]', '_', cleaned).strip('_')
     return cleaned[:50] if cleaned else "stream"
 
 
 def grab_frame(source: str):
-    """Get first frame from video or stream."""
     actual_source = source
-
     if is_youtube(source):
         print("YouTube link detected. Extracting stream...")
         stream_url = get_youtube_stream_url(source)
@@ -118,17 +111,19 @@ def grab_frame(source: str):
             print("Failed to extract YouTube stream.")
             return None
         actual_source = stream_url
-
     cap = cv2.VideoCapture(actual_source)
     ret, frame = cap.read()
     cap.release()
-
     return frame if ret else None
 
 
-def mouse_callback(event, x, y, flags, param):
-    global points, frame_display
+def get_zone_color(zone_info):
+    direction = zone_info.get("direction", "")
+    return DIR_COLORS.get(direction, FALLBACK_COLOR)
 
+
+def mouse_callback(event, x, y, flags, param):
+    global points
     if event == cv2.EVENT_LBUTTONDOWN:
         points.append((x, y))
         redraw()
@@ -138,15 +133,18 @@ def redraw():
     global frame_display
     frame_display = frame_clean.copy()
 
-    # Draw existing saved zones
-    for i, (name, pts) in enumerate(zones.items()):
-        color = COLORS[i % len(COLORS)]
-        poly = np.array(pts, np.int32)
+    # Draw saved zones
+    for name, info in zones.items():
+        color = get_zone_color(info)
+        poly = np.array(info["points"], np.int32)
+        overlay = frame_display.copy()
+        cv2.fillPoly(overlay, [poly], (*color, 50))
+        cv2.addWeighted(overlay, 0.2, frame_display, 0.8, 0, frame_display)
         cv2.polylines(frame_display, [poly], True, color, 2)
-        cx = int(np.mean([p[0] for p in pts]))
-        cy = int(np.mean([p[1] for p in pts]))
-        cv2.putText(frame_display, name, (cx - 20, cy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        cx = int(np.mean([p[0] for p in info["points"]]))
+        cy = int(np.mean([p[1] for p in info["points"]]))
+        cv2.putText(frame_display, name, (cx - 30, cy),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
     # Draw current in-progress zone
     if points:
@@ -158,7 +156,7 @@ def redraw():
     # Instructions
     y = 25
     instructions = [
-        "Click: add point | n: finish zone | r: reset",
+        "Click: add point | u: undo | n: finish zone | r: reset",
         "d: delete last | s: save & exit | q: quit",
         f"Zones: {len(zones)} | Current points: {len(points)}",
     ]
@@ -166,6 +164,48 @@ def redraw():
         cv2.putText(frame_display, text, (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         y += 20
+
+
+def prompt_zone_info() -> dict | None:
+    """Prompt user in terminal for zone metadata."""
+    print("\n--- Zone Setup ---")
+    print("Zone types: approaching, leaving, middle")
+    zone_type = input("Type (approaching/leaving/middle): ").strip().lower()
+
+    if zone_type == "middle":
+        middle_type = input("Middle type (roundabout/normal): ").strip().lower()
+        if middle_type not in ("roundabout", "normal"):
+            middle_type = "normal"
+        name = f"middle_{middle_type}"
+        return {
+            "name": name,
+            "type": "middle",
+            "middle_type": middle_type,
+            "direction": "middle",
+            "lane": 0,
+        }
+
+    if zone_type not in ("approaching", "leaving"):
+        print("Invalid type. Use: approaching, leaving, or middle")
+        return None
+
+    direction = input("Direction (north/south/east/west): ").strip().lower()
+    if direction not in ("north", "south", "east", "west"):
+        print("Invalid direction.")
+        return None
+
+    lane = input("Lane number (1, 2, 3...): ").strip()
+    if not lane.isdigit():
+        print("Invalid lane number.")
+        return None
+
+    name = f"{direction}_{zone_type}_lane{lane}"
+    return {
+        "name": name,
+        "type": zone_type,
+        "direction": direction,
+        "lane": int(lane),
+    }
 
 
 def main():
@@ -176,11 +216,9 @@ def main():
     parser.add_argument("--name", default=None, help="Custom name override for the lane map file")
     args = parser.parse_args()
 
-    # Create output directories
     ROI_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
     ROI_STREAM_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Determine source type, output path, and name
     source = args.source
     stream = is_stream(source)
 
@@ -199,7 +237,6 @@ def main():
     print(f"Source type: {'stream' if stream else 'video'}")
     print(f"Lane map will save to: {out_path}")
 
-    # Grab first frame
     frame = grab_frame(source)
     if frame is None:
         print(f"Error: cannot read from '{source}'")
@@ -217,14 +254,21 @@ def main():
         cv2.imshow("Draw ROI Zones", frame_display)
         key = cv2.waitKey(1) & 0xFF
 
-        if key == ord("n"):  # finish current zone
+        if key == ord("u"):  # undo last point
+            if points:
+                points.pop()
+                redraw()
+
+        elif key == ord("n"):  # finish current zone
             if len(points) < 3:
                 print("Need at least 3 points for a zone")
                 continue
-            name = input("Zone name (e.g. north, south, east, west): ").strip()
-            if name:
-                zones[name] = list(points)
-                print(f"  Saved zone '{name}' with {len(points)} points")
+            info = prompt_zone_info()
+            if info:
+                name = info.pop("name")
+                info["points"] = list(points)
+                zones[name] = info
+                print(f"  Saved zone '{name}' ({info['type']}, {info.get('direction','')}, lane {info.get('lane','-')})")
             points = []
             redraw()
 
@@ -244,7 +288,6 @@ def main():
                 print("No zones to save")
                 continue
 
-            # Save zone JSON
             with open(out_path, "w") as f:
                 json.dump({
                     "source": source,
@@ -253,7 +296,7 @@ def main():
             print(f"\nSaved {len(zones)} zones to {out_path}")
             break
 
-        elif key == ord("q"):  # quit without saving
+        elif key == ord("q"):
             print("Quit without saving")
             break
 

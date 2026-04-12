@@ -141,11 +141,32 @@ python tools/draw_roi.py --source dl/data/raw/video.mp4 --name junction_A
 | Key | Action |
 |-----|--------|
 | Click | Add polygon point |
-| `n` | Finish zone, enter name (e.g. north, south) |
+| `u` | Undo last point |
+| `n` | Finish zone — prompted for type, direction, lane |
 | `r` | Reset current zone |
 | `d` | Delete last saved zone |
 | `s` | Save all zones to JSON and exit |
 | `q` | Quit without saving |
+
+### Zone naming (prompted on `n`)
+
+Each zone is prompted with 3 questions:
+
+1. **Type:** `approaching` (vehicles entering junction), `leaving` (vehicles exiting), or `middle` (junction center)
+2. **Direction:** `north`, `south`, `east`, `west` (skipped for middle)
+3. **Lane number:** `1`, `2`, `3`... (skipped for middle)
+
+For middle zones, you choose `roundabout` or `normal`.
+
+**Examples of auto-generated zone names:**
+```
+north_approaching_lane1
+north_leaving_lane2
+south_approaching_lane1
+east_leaving_lane1
+middle_roundabout
+middle_normal
+```
 
 ### Output structure
 ```
@@ -154,6 +175,34 @@ tools/roi/
 │   └── traffic_cam1_laneMap.json
 └── stream/         ← lane maps for live streams
     └── NYC_Traffic_Live_laneMap.json
+```
+
+### Sample JSON output
+```json
+{
+  "source": "dl/data/raw/traffic_cam1.mp4",
+  "zones": {
+    "north_approaching_lane1": {
+      "type": "approaching",
+      "direction": "north",
+      "lane": 1,
+      "points": [[100, 50], [300, 50], [280, 200], [120, 200]]
+    },
+    "north_leaving_lane2": {
+      "type": "leaving",
+      "direction": "north",
+      "lane": 2,
+      "points": [[310, 50], [450, 50], [430, 200], [290, 200]]
+    },
+    "middle_roundabout": {
+      "type": "middle",
+      "middle_type": "roundabout",
+      "direction": "middle",
+      "lane": 0,
+      "points": [[200, 200], [400, 200], [400, 350], [200, 350]]
+    }
+  }
+}
 ```
 
 ---
