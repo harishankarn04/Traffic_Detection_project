@@ -22,12 +22,13 @@ def get_density_level(vehicle_count):
     return "CONGESTED"
 
 
-def build_output(vehicle_count):
+def build_output(vehicle_count, predicted_density=None):
     """
     Build the JSON-ready output dict for a single frame.
 
     Args:
         vehicle_count (int): Number of vehicles detected
+        predicted_density (str|None): LSTM predicted density for next interval
 
     Returns:
         dict: Output matching the project's data format spec
@@ -36,5 +37,5 @@ def build_output(vehicle_count):
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "vehicle_count": vehicle_count,
         "current_density": get_density_level(vehicle_count),
-        "predicted_density": None,  # LSTM prediction added in a later phase
+        "predicted_density": predicted_density,
     }

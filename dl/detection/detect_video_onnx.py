@@ -26,6 +26,9 @@ from density.count_vehicles import count_vehicles
 from density.density_logic import build_output
 from utils.visualization import draw_detections, draw_hud
 
+# LSTM predictor — loaded only if --lstm flag is passed
+_lstm_predictor = None
+
 INPUT_SIZE = 640
 NMS_THRESHOLD = 0.45
 
@@ -65,8 +68,8 @@ def postprocess(output, scale, pad_x, pad_y):
     """
     Convert raw YOLOv8 ONNX output to the common detection format.
 
-    YOLOv8 output shape: [1, 84, 8400]
-      84 = 4 (cx, cy, w, h) + 80 class scores
+    YOLOv8 output shape: [1, 12, 8400]
+      12 = 4 (cx, cy, w, h) + 8 class scores (car, bus, truck, motorcycle, auto_rickshaw, ambulance, fire_truck, police)
       8400 = number of anchor candidates
 
     Returns:
@@ -132,12 +135,30 @@ def get_youtube_stream_url(youtube_url):
         print("Error extracting YouTube stream:", e)
         return None
 
-def run(video_path, model_path, save_output=False):
+def run(video_path, model_path, save_output=False, lstm_path=None, serial_port=None, headless=False):
+    global _lstm_predictor
     ort.set_default_logger_severity(3)
-    # session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
 
-    # Enable for GPU or NPU
-    session = ort.InferenceSession(model_path, providers=["CoreMLExecutionProvider"])
+    # Load LSTM predictor if model path provided
+    if lstm_path:
+        from prediction.lstm_predict import LSTMPredictor
+        _lstm_predictor = LSTMPredictor(lstm_path)
+        print(f"LSTM predictor loaded: {lstm_path}")
+
+    # Open serial port to ESP32 if specified
+    ser = None
+    if serial_port:
+        import serial
+        ser = serial.Serial(serial_port, 115200, timeout=1)
+        print(f"Serial port opened: {serial_port}")
+
+    # Auto-select best available provider: CoreML (M1) → CPU (RPi/others)
+    available = [p.lower() for p in ort.get_available_providers()]
+    if "coremlexecutionprovider" in available:
+        providers = ["CoreMLExecutionProvider"]
+    else:
+        providers = ["CPUExecutionProvider"]
+    session = ort.InferenceSession(model_path, providers=providers)
     
     input_name = session.get_inputs()[0].name
 
@@ -170,6 +191,8 @@ def run(video_path, model_path, save_output=False):
         print(f"Saving annotated video to: {out_path}")
 
     prev_time = time.time()
+    last_serial_time = 0
+    EMERGENCY_CLASSES = {5, 6, 7}  # ambulance, fire_truck, police
 
     while True:
         ret, frame = cap.read()
@@ -180,8 +203,16 @@ def run(video_path, model_path, save_output=False):
         raw_output = session.run(None, {input_name: tensor})[0]
         detections = postprocess(raw_output, scale, pad_x, pad_y)
 
+        emergency_detected = any(d["cls"] in EMERGENCY_CLASSES for d in detections)
+
         count = count_vehicles(detections)
-        output = build_output(count)
+
+        predicted = None
+        if _lstm_predictor:
+            _lstm_predictor.update(count)
+            predicted = _lstm_predictor.predict()
+
+        output = build_output(count, predicted)
 
         curr_time = time.time()
         fps = 1.0 / (curr_time - prev_time + 1e-6)
@@ -192,17 +223,30 @@ def run(video_path, model_path, save_output=False):
 
         print(json.dumps(output))
 
-        cv2.imshow("Traffic Detection (ONNX)", frame)
+        # Send to ESP32 via UART every 2 seconds, or immediately on emergency
+        if ser and (emergency_detected or curr_time - last_serial_time >= 2.0):
+            payload = json.dumps({
+                "vehicle_count":      output["vehicle_count"],
+                "current_density":    output["current_density"],
+                "predicted_density":  output["predicted_density"] or "LOW",
+                "emergency":          emergency_detected,
+            }) + "\n"
+            ser.write(payload.encode())
+            last_serial_time = curr_time
+
+        if not headless:
+            cv2.imshow("Traffic Detection (ONNX)", frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
         if writer:
             writer.write(frame)
 
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-
     cap.release()
     if writer:
         writer.release()
+    if ser:
+        ser.close()
     cv2.destroyAllWindows()
 
 
@@ -211,6 +255,9 @@ if __name__ == "__main__":
     parser.add_argument("--video", required=True, help="Path to input video file")
     parser.add_argument("--model", required=True, help="Path to ONNX model file (yolov8n.onnx)")
     parser.add_argument("--save", action="store_true", help="Save annotated output video")
+    parser.add_argument("--lstm", default=None, help="Path to LSTM ONNX model (optional)")
+    parser.add_argument("--serial", default=None, help="Serial port to ESP32 (e.g. /dev/serial0)")
+    parser.add_argument("--headless", action="store_true", help="Run without display (use on RPi)")
     args = parser.parse_args()
 
-    run(args.video, args.model, save_output=args.save)
+    run(args.video, args.model, save_output=args.save, lstm_path=args.lstm, serial_port=args.serial, headless=args.headless)

@@ -1,9 +1,13 @@
-# COCO dataset vehicle class IDs
+# Fine-tuned model class IDs
 VEHICLE_CLASSES = {
-    2: "car",
+    0: "car",
+    1: "bus",
+    2: "truck",
     3: "motorcycle",
-    5: "bus",
-    7: "truck",
+    4: "auto_rickshaw",
+    5: "ambulance",
+    6: "fire_truck",
+    7: "police",
 }
 
 # Vehicle count → Density level thresholds

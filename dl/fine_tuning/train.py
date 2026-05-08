@@ -12,20 +12,25 @@ from pathlib import Path
 
 DATA_YAML = Path(__file__).parent / "merged" / "data.yaml"
 RUNS_DIR  = Path(__file__).parent / "runs"
+BEST_PT   = RUNS_DIR / "yolov8n_traffic" / "weights" / "best.pt"
 
-model = YOLO("yolov8n.pt")  # COCO pretrained — auto-downloads if not present
+if __name__ == "__main__":
+    # NOTE: If number of classes changed, must use yolov8n.pt (not best.pt)
+    # best.pt can only be reused when class count stays the same
+    model = YOLO("yolov8n.pt")
+    print("Starting from yolov8n.pt (class count changed to 8)")
 
-model.train(
-    data=str(DATA_YAML),
-    epochs=50,
-    imgsz=640,
-    batch=8,        # safe for 6GB VRAM (RTX 4050)
-    patience=10,    # early stopping
-    augment=True,   # mosaic, flip, HSV — helps with CCTV angle variation
-    device="cuda",  # NVIDIA GPU (change to "mps" for M1, "cpu" as fallback)
-    cache=False,
-    workers=4,
-    project=str(RUNS_DIR),
-    name="yolov8n_traffic",
-    exist_ok=True,
-)
+    model.train(
+        data=str(DATA_YAML),
+        epochs=50,
+        imgsz=640,
+        batch=16,       # RTX 4050 6GB can handle 16; drop to 8 if OOM
+        patience=10,    # early stopping
+        augment=True,   # mosaic, flip, HSV — helps with CCTV angle variation
+        device="cuda",
+        cache="disk",   # cache preprocessed images to disk — faster epoch iterations
+        workers=8,      # more CPU threads feeding GPU
+        project=str(RUNS_DIR),
+        name="yolov8n_traffic",
+        exist_ok=True,
+    )

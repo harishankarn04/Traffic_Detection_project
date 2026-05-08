@@ -1,0 +1,5 @@
+opencv-python>=4.8
+numpy
+onnxruntime>=1.16
+yt-dlp
+pyserial
