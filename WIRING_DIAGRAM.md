@@ -1,107 +1,68 @@
-# Wiring Diagram — ATCS Hardware Setup
+# Full System Wiring Diagram — ATCS 
 
-## Components Needed
-
-| Component | Quantity |
-|-----------|----------|
-| ESP32 DevKit V1 | 1 |
-| Raspberry Pi 4 | 1 |
-| Red LED | 2 |
-| Yellow LED | 2 |
-| Green LED | 2 |
-| 330Ω resistor | 6 |
-| Push button | 1 |
-| Breadboard | 1 |
-| Jumper wires | ~20 |
+This document details the complete wiring for **both** ESP32 units in the Master/Slave architecture.
 
 ---
 
-## LED Colours
+## 1. `c_esp32` (City Centre / Master) Wiring
+*This ESP32 is the brain. It connects to the Raspberry Pi to get AI data, controls the city traffic lights, and broadcasts to the outskirt.*
 
-| Signal | GPIO | LED Colour |
-|--------|------|------------|
-| NS_RED | 25 | Red |
-| NS_YELLOW | 26 | Yellow |
-| NS_GREEN | 27 | Green |
-| EW_RED | 14 | Red |
-| EW_YELLOW | 12 | Yellow |
-| EW_GREEN | 13 | Green |
+### A. Power & Ground
+* Power the ESP32 by connecting it to the Raspberry Pi via a Micro-USB cable.
+* Connect a GND pin from the ESP32 to the breadboard's negative (`-`) rail. **All components will share this GND rail.**
 
-NS = North-South direction, EW = East-West direction.
+### B. Raspberry Pi 4 (UART Communication)
+*No logic level shifter is needed; both are 3.3V logic.*
+* **RPi Pin 8 (GPIO 14 - TX)** ──► **ESP32 GPIO 16 (RX)**
+* **RPi Pin 10 (GPIO 15 - RX)** ◄── **ESP32 GPIO 17 (TX)**
+* **RPi Pin 6 (GND)** ────────── **Breadboard GND rail**
 
----
+### C. NRF24L01+PA+LNA (Wireless Radio)
+* **VCC** ──► **ESP32 3.3V Pin** *(CRITICAL: Put a 10µF - 100µF capacitor across VCC and GND on the NRF module)*
+* **GND** ──► **Breadboard GND rail**
+* **CE**  ──► **ESP32 GPIO 4**
+* **CSN** ──► **ESP32 GPIO 5**
+* **SCK** ──► **ESP32 GPIO 18**
+* **MOSI** ──► **ESP32 GPIO 23**
+* **MISO** ──► **ESP32 GPIO 19**
 
-## LED Wiring (per LED)
+### D. Traffic Light LEDs
+*All LEDs require a 330Ω resistor between the ESP32 pin and the LED's longer leg (Anode). The shorter leg (Cathode) goes to the GND rail.*
+* **RED** ──[330Ω]──► **ESP32 GPIO 25**
+* **YELLOW** ──[330Ω]──► **ESP32 GPIO 26**
+* **GREEN** ──[330Ω]──► **ESP32 GPIO 27**
 
-```
-ESP32 GPIO ──[330Ω resistor]── LED anode (+, longer leg) ── LED cathode (−, shorter leg) ── GND rail
-```
-
-All 6 LED cathodes share the same GND rail on the breadboard.
-
----
-
-## Emergency Button Wiring
-
-```
-ESP32 GPIO0 ──[push button]── GND rail
-```
-
-GPIO0 is the BOOT button already on the DevKit board — no external button needed unless you want one.
-
----
-
-## RPi ↔ ESP32 UART Wiring
-
-Both boards are 3.3V — **no level shifter needed**.
-
-| RPi Pin | RPi GPIO | Direction | ESP32 Pin |
-|---------|----------|-----------|-----------|
-| Pin 8 | GPIO14 (TX) | → | GPIO16 (RX) |
-| Pin 10 | GPIO15 (RX) | ← | GPIO17 (TX) |
-| Pin 6 | GND | ── | GND |
-
-> Cross the data lines: RPi TX → ESP32 RX, RPi RX ← ESP32 TX. Always share GND.
+### E. Emergency Button
+*You can use the built-in "BOOT" button on the ESP32 DevKit, or wire an external one.*
+* **Push Button Leg 1** ──► **ESP32 GPIO 0**
+* **Push Button Leg 2** ──► **Breadboard GND rail**
 
 ---
 
-## Power
+## 2. `o_esp32` (Outskirt / Slave) Wiring
+*This ESP32 acts independently but listens to the city's broadcast to enter "City Priority Mode". It does NOT connect to the Raspberry Pi.*
 
-Power ESP32 from RPi USB port:
-```
-RPi USB-A port ──[USB cable]── ESP32 micro-USB
-```
-This shares GND automatically — no separate GND wire needed between boards.
+### A. Power & Ground
+* Power the ESP32 via a standard USB wall adapter or power bank.
+* Connect a GND pin from the ESP32 to the breadboard's negative (`-`) rail. 
 
----
+### B. NRF24L01+PA+LNA (Wireless Radio)
+*(Wired exactly the same as the Master)*
+* **VCC** ──► **ESP32 3.3V Pin** *(CRITICAL: Put a 10µF - 100µF capacitor across VCC and GND on the NRF module)*
+* **GND** ──► **Breadboard GND rail**
+* **CE**  ──► **ESP32 GPIO 4**
+* **CSN** ──► **ESP32 GPIO 5**
+* **SCK** ──► **ESP32 GPIO 18**
+* **MOSI** ──► **ESP32 GPIO 23**
+* **MISO** ──► **ESP32 GPIO 19**
 
-## Full Breadboard Layout
+### C. Traffic Light LEDs
+*(Wired exactly the same as the Master)*
+* **RED** ──[330Ω]──► **ESP32 GPIO 25**
+* **YELLOW** ──[330Ω]──► **ESP32 GPIO 26**
+* **GREEN** ──[330Ω]──► **ESP32 GPIO 27**
 
-```
-RPi                          ESP32 DevKit V1
-────                         ───────────────
-[Pin 8  TX] ─────────────►  [GPIO16 RX]
-[Pin 10 RX] ◄─────────────  [GPIO17 TX]
-[Pin 6 GND] ──────────────  [GND] ──── breadboard GND rail
-[USB port]  ──────────────  [micro-USB 5V]
-
-GPIO25 ──[330Ω]── RED LED   (NS) ── GND rail
-GPIO26 ──[330Ω]── YELLOW LED (NS) ── GND rail
-GPIO27 ──[330Ω]── GREEN LED (NS) ── GND rail
-GPIO14 ──[330Ω]── RED LED   (EW) ── GND rail
-GPIO12 ──[330Ω]── YELLOW LED (EW) ── GND rail
-GPIO13 ──[330Ω]── GREEN LED (EW) ── GND rail
-
-GPIO0  ──[push button]── GND rail   (optional, BOOT button on board works too)
-```
-
----
-
-## Serial Monitor Check (Arduino IDE)
-
-After flashing, open Serial Monitor at **115200 baud**. Expected output:
-```
-[ATCS] System started.
-[SIGNAL] NS GREEN for 17s (density: LOW)
-[MONITOR] count=0 | current=LOW | predicted=LOW | signal=NS_GO | emergency=NO
-```
+### D. Emergency Button
+*(Wired exactly the same as the Master)*
+* **Push Button Leg 1** ──► **ESP32 GPIO 0**
+* **Push Button Leg 2** ──► **Breadboard GND rail**
