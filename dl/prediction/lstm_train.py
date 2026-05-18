@@ -17,6 +17,9 @@ import torch
 import torch.nn as nn
 from pathlib import Path
 from preprocess import load_data
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
 
 DEVICE    = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 SAVE_PATH = Path(__file__).parent / "lstm_best.pt"
@@ -55,6 +58,10 @@ def train():
     best_val_acc = 0.0
     no_improve   = 0
 
+    history_loss = []
+    history_acc = []
+
+    print(f"Train: {len(train_loader.dataset)} sequences | Val: {len(val_loader.dataset)} sequences")
     for epoch in range(1, EPOCHS + 1):
         # --- Train ---
         model.train()
@@ -78,7 +85,12 @@ def train():
                 total   += y.size(0)
 
         val_acc = correct / total
-        print(f"Epoch {epoch:3d}/{EPOCHS} | loss: {total_loss/len(train_loader):.4f} | val_acc: {val_acc:.4f}")
+        avg_loss = total_loss / len(train_loader)
+        
+        history_loss.append(avg_loss)
+        history_acc.append(val_acc)
+        
+        print(f"Epoch {epoch:3d}/{EPOCHS} | loss: {avg_loss:.4f} | val_acc: {val_acc:.4f}")
 
         if val_acc > best_val_acc:
             best_val_acc = val_acc
@@ -91,6 +103,61 @@ def train():
                 break
 
     print(f"\nBest val accuracy: {best_val_acc:.4f} → saved to {SAVE_PATH}")
+
+    # --- Generate Training Curve Graph ---
+    print("\nGenerating Training Curve...")
+    epochs_range = range(1, len(history_loss) + 1)
+    
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    
+    color = 'tab:red'
+    ax1.set_xlabel('Training Epochs', fontsize=12)
+    ax1.set_ylabel('Training Loss', color=color, fontsize=12)
+    ax1.plot(epochs_range, history_loss, color=color, marker='o', linewidth=2, label='Loss')
+    ax1.tick_params(axis='y', labelcolor=color)
+    
+    ax2 = ax1.twinx()
+    color = 'tab:blue'
+    ax2.set_ylabel('Validation Accuracy (%)', color=color, fontsize=12)
+    ax2.plot(epochs_range, [acc * 100 for acc in history_acc], color=color, marker='s', linewidth=2, label='Accuracy')
+    ax2.tick_params(axis='y', labelcolor=color)
+    ax2.set_ylim(-5, 105)
+    
+    plt.title('LSTM Traffic Density Model Convergence', fontsize=14, pad=15)
+    fig.tight_layout()
+    
+    curve_path = Path(__file__).parent / "lstm_training_curve.png"
+    plt.savefig(curve_path, dpi=300)
+    print(f"Training Curve saved to: {curve_path}")
+
+    # --- Generate Confusion Matrix ---
+    print("\nGenerating Confusion Matrix...")
+    # Load best weights
+    model.load_state_dict(torch.load(SAVE_PATH, map_location=DEVICE))
+    model.eval()
+    
+    all_preds = []
+    all_labels = []
+    with torch.no_grad():
+        for X, y in val_loader:
+            X, y = X.to(DEVICE), y.to(DEVICE)
+            preds = model(X).argmax(dim=1)
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(y.cpu().numpy())
+            
+    cm = confusion_matrix(all_labels, all_preds)
+    labels = ["LOW", "MEDIUM", "HIGH", "CONGESTED"]
+    
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=labels, yticklabels=labels)
+    plt.xlabel('Predicted Density')
+    plt.ylabel('Actual (True) Density')
+    plt.title('LSTM Traffic Density Prediction Confusion Matrix')
+    
+    cm_path = Path(__file__).parent / "lstm_confusion_matrix.png"
+    plt.tight_layout()
+    plt.savefig(cm_path, dpi=300)
+    print(f"Confusion Matrix saved to: {cm_path}")
 
 
 if __name__ == "__main__":

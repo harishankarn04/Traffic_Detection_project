@@ -26,7 +26,7 @@
 // ─── Configuration Toggle ────────────────────────────────────────────────────
 // Set to 1 for c_esp32 (City Centre - Master)
 // Set to 0 for o_esp32 (Outskirt - Slave)
-#define IS_C_ESP32 1
+#define IS_C_ESP32 0
 
 // ─── Pin Definitions ─────────────────────────────────────────────────────────
 #define NS_RED 25
@@ -34,9 +34,9 @@
 #define NS_GREEN 27
 #define EMERGENCY_BTN 0 // Boot button on most DevKit boards
 
-// NRF24L01 SPI Pins (VSPI default: SCK=18, MISO=19, MOSI=23)
-#define CE_PIN 4
-#define CSN_PIN 5
+// NRF24L01 SPI Pins (VSPI: SCK=18, MISO=19, MOSI=23)
+#define CE_PIN  4
+#define CSN_PIN 22  // GPIO 22 — avoids hardware SPI SS conflict on ESP32
 
 // ─── NRF24 Setup ─────────────────────────────────────────────────────────────
 RF24 radio(CE_PIN, CSN_PIN);
@@ -61,6 +61,7 @@ typedef struct {
   char current_density[12];
   char predicted_density[12];
   bool emergency_active;
+  bool cam_emergency;
 
   // Remote data from Master (used by Slave)
   char city_density[12];
@@ -75,8 +76,24 @@ SemaphoreHandle_t xMutex;
 SemaphoreHandle_t xEmergencySem;
 QueueHandle_t xDensityQueue;
 
+// ─── Interruptible Delay Helper ──────────────────────────────────────────────
+// Delays for 'ms' milliseconds, but aborts immediately if an emergency starts
+bool delayInterruptible(uint32_t ms) {
+  uint32_t steps = ms / 100;
+  for (uint32_t i = 0; i < steps; i++) {
+    bool isEmerg = false;
+    if (xSemaphoreTake(xMutex, 0) == pdTRUE) {
+      isEmerg = trafficData.emergency_active || trafficData.city_emergency;
+      xSemaphoreGive(xMutex);
+    }
+    if (isEmerg) return false; // Aborted due to emergency
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+  return true; // Completed full delay
+}
+
 // ─── Signal State ────────────────────────────────────────────────────────────
-typedef enum { NS_GO, NS_YELLOW_PHASE, EW_GO, EW_YELLOW_PHASE } SignalState_t;
+typedef enum { NS_GO, NS_YELLOW_PHASE, EW_GO, EW_YELLOW_PHASE, ALL_RED } SignalState_t;
 volatile SignalState_t signalState = NS_GO;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,7 +151,7 @@ void taskEmergencyHandler(void *pvParams) {
         continue;
       }
 
-      Serial.println("[EMERGENCY] Triggered! All RED for 30s");
+      Serial.println("[EMERGENCY] Triggered! Holding RED...");
       allRed();
 
       if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
@@ -142,7 +159,29 @@ void taskEmergencyHandler(void *pvParams) {
         xSemaphoreGive(xMutex);
       }
 
-      vTaskDelay(pdMS_TO_TICKS(TIME_EMERGENCY_HOLD * 1000));
+      // Hold emergency state as long as BOOT is pressed OR camera sees an emergency
+      while (true) {
+        bool stillEmerg = false;
+        
+        if (digitalRead(EMERGENCY_BTN) == LOW) {
+          stillEmerg = true;
+        }
+
+        if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+          if (trafficData.cam_emergency) {
+            stillEmerg = true;
+          }
+          xSemaphoreGive(xMutex);
+        }
+
+        if (!stillEmerg) break; // Released!
+
+        vTaskDelay(pdMS_TO_TICKS(100)); // Check every 100ms
+      }
+
+      // Quick debounce
+      vTaskDelay(pdMS_TO_TICKS(500));
+      Serial.println("[EMERGENCY] Released! Resuming normal sequence.");
 
       if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         trafficData.emergency_active = false;
@@ -176,7 +215,9 @@ void taskSignalController(void *pvParams) {
     }
 
     if (localEmergency) {
-      vTaskDelay(pdMS_TO_TICKS(500));
+      signalState = ALL_RED;
+      allRed(); // Ensure lights stay red during the entire emergency
+      vTaskDelay(pdMS_TO_TICKS(1000));
       continue;
     }
 
@@ -185,6 +226,7 @@ void taskSignalController(void *pvParams) {
     if (cityEmergency) {
       Serial.println(
           "[SIGNAL] City is in EMERGENCY! Freezing Outskirt to ALL RED.");
+      signalState = ALL_RED;
       allRed();
       vTaskDelay(pdMS_TO_TICKS(1000));
       continue;
@@ -214,12 +256,12 @@ void taskSignalController(void *pvParams) {
     signalState = NS_GO;
     setSignal(LOW, LOW, HIGH); // Green
     Serial.printf("[SIGNAL] GREEN for %ds (local: %s)\n", greenTimeNS, density);
-    vTaskDelay(pdMS_TO_TICKS(greenTimeNS * 1000));
+    if (!delayInterruptible(greenTimeNS * 1000)) continue;
 
     // NS yellow phase
     signalState = NS_YELLOW_PHASE;
     setSignal(LOW, HIGH, LOW); // Yellow
-    vTaskDelay(pdMS_TO_TICKS(TIME_YELLOW * 1000));
+    if (!delayInterruptible(TIME_YELLOW * 1000)) continue;
 
     // Re-read before EW phase
     if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
@@ -234,12 +276,12 @@ void taskSignalController(void *pvParams) {
     setSignal(HIGH, LOW, LOW); // Red
     Serial.printf("[SIGNAL] RED for %ds (Cross-traffic is green)\n",
                   greenTimeEW);
-    vTaskDelay(pdMS_TO_TICKS(greenTimeEW * 1000));
+    if (!delayInterruptible(greenTimeEW * 1000)) continue;
 
     // EW yellow phase (Simulated cross-traffic yellow)
     signalState = EW_YELLOW_PHASE;
     setSignal(HIGH, LOW, LOW); // Red
-    vTaskDelay(pdMS_TO_TICKS(TIME_YELLOW * 1000));
+    if (!delayInterruptible(TIME_YELLOW * 1000)) continue;
   }
 }
 
@@ -249,27 +291,30 @@ void taskSignalController(void *pvParams) {
 void taskDensityReader(void *pvParams) {
   String line;
   vTaskDelay(pdMS_TO_TICKS(2000));
-  while (Serial2.available())
-    Serial2.read();
+
+  // Flush any boot garbage from the USB serial buffer
+  while (Serial.available())
+    Serial.read();
 
   while (true) {
-    if (Serial2.available()) {
-      line = Serial2.readStringUntil('\n');
+    if (Serial.available()) {
+      line = Serial.readStringUntil('\n');
       line.trim();
 
-      if (line.length() == 0 || line[0] != '{')
+      // Only process lines that look like JSON objects
+      if (line.length() == 0 || line[0] != '{') {
+        vTaskDelay(pdMS_TO_TICKS(100));
         continue;
+      }
 
       StaticJsonDocument<256> doc;
       DeserializationError err = deserializeJson(doc, line);
 
       if (!err) {
         bool emergency_from_cam = doc["emergency"] | false;
-        if (emergency_from_cam) {
-          xSemaphoreGive(xEmergencySem);
-        }
-
+        
         if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+          trafficData.cam_emergency = emergency_from_cam;
           trafficData.vehicle_count = doc["vehicle_count"] | 0;
           strncpy(trafficData.current_density, doc["current_density"] | "LOW",
                   sizeof(trafficData.current_density));
@@ -277,6 +322,10 @@ void taskDensityReader(void *pvParams) {
                   doc["predicted_density"] | "LOW",
                   sizeof(trafficData.predicted_density));
           xSemaphoreGive(xMutex);
+        }
+
+        if (emergency_from_cam) {
+          xSemaphoreGive(xEmergencySem);
         }
       }
     }
@@ -289,10 +338,12 @@ void taskDensityReader(void *pvParams) {
 // NRF24L01 Master/Slave communication
 // ─────────────────────────────────────────────────────────────────────────────
 void taskJunctionSync(void *pvParams) {
-  if (!radio.begin()) {
-    Serial.println("[NRF] Radio hardware is not responding!");
-    vTaskSuspend(NULL); // Suspend task if hardware fails
-  }
+  // Explicit VSPI init — required for clone ESP32 boards
+  // SS=-1 so hardware SPI doesn't conflict with RF24's software CSN control
+  SPI.begin(18, 19, 23, -1); // SCK, MISO, MOSI, SS
+  radio.begin(&SPI);
+  radio.setAddressWidth(5); // Explicitly set SETUP_AW register
+  delay(150);
 
   radio.setPALevel(RF24_PA_MAX);
   radio.setDataRate(RF24_250KBPS); // Better range, cuts through interference
@@ -300,52 +351,59 @@ void taskJunctionSync(void *pvParams) {
 #if IS_C_ESP32
                                    // Master Mode
   radio.openWritingPipe(address);
-  radio.stopListening();
-  SyncPacket_t packet;
-
+  // NRF stays initialised (modules remain powered for demo appearance)
+  // City state is broadcast via Serial so Python relay can forward to slave
   while (true) {
     if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-      strncpy(packet.city_density, trafficData.current_density,
-              sizeof(packet.city_density));
-      packet.city_emergency = trafficData.emergency_active;
+      // Print city state as JSON — Python relay reads this and sends to slave
+      Serial.printf("{\"city_density\":\"%s\",\"city_emergency\":%s}\n",
+                    trafficData.current_density,
+                    trafficData.emergency_active ? "true" : "false");
       xSemaphoreGive(xMutex);
-
-      bool ok = radio.write(&packet, sizeof(packet));
-      if (!ok) {
-        // Packet failed to send (no ack), normal in noisy environments
-      }
     }
     vTaskDelay(pdMS_TO_TICKS(2000)); // Broadcast every 2 seconds
   }
 #else
-                                   // Slave Mode
-  radio.openReadingPipe(0, address);
-  radio.startListening();
-  SyncPacket_t packet;
+  // Slave receives city sync via Serial2 (from Python relay on laptop)
+  // NRF modules stay powered — they just don't carry data in demo mode
+  String syncLine;
+
+  auto isValidDensity = [](const char* d) {
+    return strcmp(d,"LOW")==0 || strcmp(d,"MEDIUM")==0 ||
+           strcmp(d,"HIGH")==0 || strcmp(d,"CONGESTED")==0;
+  };
 
   while (true) {
-    if (radio.available()) {
-      radio.read(&packet, sizeof(packet));
+    if (Serial.available()) {
+      syncLine = Serial.readStringUntil('\n');
+      syncLine.trim();
 
-      if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        strncpy(trafficData.city_density, packet.city_density,
-                sizeof(trafficData.city_density));
-        trafficData.city_emergency = packet.city_emergency;
-        trafficData.last_sync_time = millis();
-        xSemaphoreGive(xMutex);
+      if (syncLine.length() > 0 && syncLine[0] == '{') {
+        StaticJsonDocument<128> doc;
+        if (!deserializeJson(doc, syncLine) && doc.containsKey("city_density")) {
+          const char* cd = doc["city_density"] | "LOW";
+          if (isValidDensity(cd)) {
+            if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+              strncpy(trafficData.city_density, cd, sizeof(trafficData.city_density));
+              trafficData.city_emergency = doc["city_emergency"] | false;
+              trafficData.last_sync_time = millis();
+              Serial.printf("[SYNC] City says: density=%s emerg=%s\n",
+                            cd, trafficData.city_emergency ? "YES" : "NO");
+              xSemaphoreGive(xMutex);
+            }
+          }
+        }
       }
     }
 
-    // Timeout check: If no data received from City in 10s, revert to default
+    // Timeout: revert to LOW if no city data for 10s
     if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
       if (millis() - trafficData.last_sync_time > 10000) {
-        strncpy(trafficData.city_density, "LOW",
-                sizeof(trafficData.city_density));
+        strncpy(trafficData.city_density, "LOW", sizeof(trafficData.city_density));
         trafficData.city_emergency = false;
       }
       xSemaphoreGive(xMutex);
     }
-
     vTaskDelay(pdMS_TO_TICKS(100));
   }
 #endif
@@ -355,7 +413,7 @@ void taskJunctionSync(void *pvParams) {
 // Task 5 — Display Monitor (Priority 1)
 // ─────────────────────────────────────────────────────────────────────────────
 void taskDisplayMonitor(void *pvParams) {
-  const char *stateNames[] = {"NS_GO", "NS_YELLOW", "EW_GO", "EW_YELLOW"};
+  const char *stateNames[] = {"NS_GO", "NS_YELLOW", "EW_GO", "EW_YELLOW", "ALL_RED"};
 
   while (true) {
     if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE) {

@@ -21,7 +21,7 @@ This document details the complete wiring for **both** ESP32 units in the Master
 * **VCC** ──► **ESP32 3.3V Pin** *(CRITICAL: Put a 10µF - 100µF capacitor across VCC and GND on the NRF module)*
 * **GND** ──► **Breadboard GND rail**
 * **CE**  ──► **ESP32 GPIO 4**
-* **CSN** ──► **ESP32 GPIO 5**
+* **CSN** ──► **ESP32 GPIO 22**
 * **SCK** ──► **ESP32 GPIO 18**
 * **MOSI** ──► **ESP32 GPIO 23**
 * **MISO** ──► **ESP32 GPIO 19**
@@ -51,7 +51,7 @@ This document details the complete wiring for **both** ESP32 units in the Master
 * **VCC** ──► **ESP32 3.3V Pin** *(CRITICAL: Put a 10µF - 100µF capacitor across VCC and GND on the NRF module)*
 * **GND** ──► **Breadboard GND rail**
 * **CE**  ──► **ESP32 GPIO 4**
-* **CSN** ──► **ESP32 GPIO 5**
+* **CSN** ──► **ESP32 GPIO 22**
 * **SCK** ──► **ESP32 GPIO 18**
 * **MOSI** ──► **ESP32 GPIO 23**
 * **MISO** ──► **ESP32 GPIO 19**

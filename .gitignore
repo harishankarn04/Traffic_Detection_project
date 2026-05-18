@@ -29,3 +29,6 @@ dl/detection/download_model.py
 
 # Windows error logs
 windows_error
+*.mp4
+dataset_downloads/
+merged_universe/
