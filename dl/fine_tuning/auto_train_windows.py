@@ -25,7 +25,8 @@ UNIVERSAL_CLASS_MAP = {
     3: "motorcycle",
     4: "auto_rickshaw",
     5: "ambulance",
-    6: "fire_truck"
+    6: "fire_truck",
+    7: "van"
 }
 
 
@@ -61,7 +62,8 @@ def create_class_mapping(foreign_classes):
         # Priority 2: Auto-Rickshaw (BEFORE 'car/vehicle' catch-all!)
         elif any(k in name for k in [
             "auto_rickshaw", "autorickshaw", "rickshaw", "tuk_tuk",
-            "tuktuk", "three_wheeler", "threewheeler", "tempo", "e_rickshaw"
+            "tuktuk", "three_wheeler", "threewheeler", "e_rickshaw",
+            "cng"  # CNG-powered auto-rickshaws common in India/Bangladesh
         ]) or name in ["auto", "rick", "rik"]:
             target = "auto_rickshaw"
 
@@ -69,17 +71,23 @@ def create_class_mapping(foreign_classes):
         elif any(k in name for k in ["bus", "minibus", "mini_bus", "coach"]):
             target = "bus"
 
-        # Priority 4: Truck/Van (before generic 'car')
+        # Priority 4a: Van (separate from truck — smaller cargo/passenger vehicle)
         elif any(k in name for k in [
-            "truck", "lorry", "van", "pickup", "mini_truck",
-            "minitruck", "goods_vehicle"
+            "van", "tempo", "mini_van", "minivan", "pickup", "microvan"
+        ]):
+            target = "van"
+
+        # Priority 4b: Truck (heavy goods vehicles)
+        elif any(k in name for k in [
+            "truck", "lorry", "flatbed", "goods_vehicle", "container"
         ]):
             target = "truck"
 
         # Priority 5: Motorcycle / Two-wheelers (comprehensive aliases)
         elif any(k in name for k in [
             "motorcycle", "motorbike", "scooter", "moped", "scooty",
-            "two_wheeler", "twowheeler", "motor_cycle"
+            "two_wheeler", "twowheeler", "motor_cycle",
+            "motocycle"  # typo in liang-p5nwe dataset
         ]) or name in ["bike", "moto", "motorbike"]:
             target = "motorcycle"
         elif "bike" in name and "dirt" not in name:  # catches 'bike', 'e-bike' etc.

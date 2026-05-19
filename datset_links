@@ -1,0 +1,16 @@
+# Dataset Links - Not Yet Used
+# The following were considered but NOT downloaded (bike-only, already covered by main datasets)
+
+https://universe.roboflow.com/liang-p5nwe/motocycle-06vey - bike only, skip if VehicleDetection covers bikes
+https://universe.roboflow.com/test1-yaqo3/motocycle-sq6ap - bike only, skip if VehicleDetection covers bikes
+
+# -------------------------------------------------------
+# DOWNLOADED & USED (in new_Dataset_v2 folder):
+# - Ambulance.v1i.yolov8.zip
+# - Smart Traffic Management System.v1i.yolov8.zip  (rickshaw)
+# - Traffic model.v1i.yolov8.zip  (radhika, multi-class)
+# - UA-DETRAC-DATASET-10K.v2.yolov8.zip
+# - Vehicle Detection.v9-yolov8m_200.yolov8.zip
+# - VehicleDetection.v9i.yolov8.zip  (trafficmanagement)
+# - IDD.v3i.yolov8.zip  (Indian Driving Dataset)
+# - Indian Vehicle Detection.v1.yolov8.zip  (kunnusherry)

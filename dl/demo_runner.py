@@ -48,6 +48,7 @@ CLASS_COLORS = {
     "car":           (0,   255, 0),
     "bus":           (255, 165, 0),
     "truck":         (0,   165, 255),
+    "van":           (255, 100, 180),   # pink — distinct from truck
     "motorcycle":    (255, 255, 0),
     "auto_rickshaw": (0,   255, 255),
     "ambulance":     (0,   0,   255),
