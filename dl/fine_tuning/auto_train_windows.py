@@ -290,14 +290,19 @@ def cleanup_space():
         shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
         print("  [✓] Deleted raw dataset ZIPs and extracted folders.")
         
-    # 3. Delete PyTorch weights from ALL run folders (keep the graphs!)
+    # 3. Export training graphs to results_graphs folder
     if RUNS_DIR.exists():
         for run_folder in RUNS_DIR.iterdir():
             if run_folder.is_dir():
-                weights_dir = run_folder / "weights"
-                if weights_dir.exists():
-                    shutil.rmtree(weights_dir, ignore_errors=True)
-                    print(f"  [✓] Deleted massive .pt weights from {run_folder.name}")
+                # Copy charts to the main results_graphs folder
+                graphs_dest = BASE_DIR.parent / "results_graphs" / "training_metrics"
+                graphs_dest.mkdir(parents=True, exist_ok=True)
+                
+                for img_ext in ["*.png", "*.jpg", "*.csv"]:
+                    for file_path in run_folder.glob(img_ext):
+                        shutil.copy(file_path, graphs_dest / file_path.name)
+                
+                print(f"  [✓] Copied training charts to {graphs_dest}")
 
 if __name__ == "__main__":
     merge_datasets()
