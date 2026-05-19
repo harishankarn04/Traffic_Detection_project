@@ -75,29 +75,39 @@ def merge_datasets():
     total_boxes = 0
     kept_boxes = 0
 
-    if not DOWNLOAD_DIR.exists() or not any(DOWNLOAD_DIR.iterdir()):
+    zip_files = [f for f in DOWNLOAD_DIR.iterdir() if f.suffix.lower() == ".zip"]
+    folders = [d for d in DOWNLOAD_DIR.iterdir() if d.is_dir()]
+    
+    if not zip_files and not folders:
         print(f"[ERROR] No datasets found in {DOWNLOAD_DIR}!")
-        print("Please download the ZIP files from Roboflow and extract them into that folder.")
+        print("Please download the ZIP files from Roboflow and place them into that folder.")
         exit(1)
 
-    # 1. Auto-Extract any ZIP files found
-    for file in DOWNLOAD_DIR.iterdir():
-        if file.suffix.lower() == ".zip":
-            extract_path = DOWNLOAD_DIR / file.stem
-            if not extract_path.exists():
-                print(f"\n[PHASE 1] Auto-extracting {file.name}...")
-                with zipfile.ZipFile(file, 'r') as zip_ref:
-                    zip_ref.extractall(extract_path)
-            # We don't delete the zip just in case the user wants to keep it
+    # 1. INLINE PROCESSING
+    # We extract, process, and delete one ZIP at a time to save disk space
+    for file in zip_files:
+        extract_path = DOWNLOAD_DIR / file.stem
+        print(f"\n[PHASE 1.5] Inline Processing {file.name}...")
+        
+        with zipfile.ZipFile(file, 'r') as zip_ref:
+            zip_ref.extractall(extract_path)
+            
+        # Process the newly extracted folder
+        folders.append(extract_path)
+        
+        # We will delete the .zip file right after adding it to the queue
+        file.unlink()
+        print(f"  [✓] Extracted & Deleted original ZIP to save space.")
 
-    # 2. Process all dataset folders
-    for dataset_path in DOWNLOAD_DIR.iterdir():
-        if not dataset_path.is_dir(): continue
+    # 2. MERGE LOGIC
+    for dataset_path in folders:
+        if not dataset_path.exists(): continue
         
         project_name = dataset_path.name
         yaml_file = dataset_path / "data.yaml"
         
         if not yaml_file.exists():
+            shutil.rmtree(dataset_path, ignore_errors=True)
             continue
             
         with open(yaml_file, "r") as f:
@@ -108,7 +118,7 @@ def merge_datasets():
             foreign_classes = [foreign_classes[i] for i in range(len(foreign_classes))]
             
         mapping = create_class_mapping(foreign_classes)
-        print(f"  [>] Processing {project_name} | Class Map: {mapping}")
+        print(f"  [>] Merging {project_name} | Class Map: {mapping}")
         
         for split in ["train", "valid", "test"]:
             img_dir = dataset_path / split / "images"
@@ -148,6 +158,10 @@ def merge_datasets():
                         f.writelines(new_labels)
                         
                     global_img_counter += 1
+                    
+        # IMMEDIATELY DELETE THE EXTRACTED FOLDER TO RECLAIM SPACE
+        shutil.rmtree(dataset_path, ignore_errors=True)
+        print(f"  [✓] Deleted temporary folder {project_name} to save space.")
 
     # Write unified data.yaml
     yaml_content = {
