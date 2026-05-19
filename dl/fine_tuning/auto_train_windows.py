@@ -212,7 +212,33 @@ def export_onnx(best_pt_path):
     print(f"Copy this 'yolov8n_traffic_v2.onnx' file back to your Mac for the Live Demo!")
     print(f"=======================================================")
 
+# =====================================================================
+# 5. AUTOMATED DISK CLEANUP
+# =====================================================================
+def cleanup_space():
+    print(f"\n[PHASE 5] Deep Cleaning Disk Space...")
+    
+    # 1. Delete merged universe
+    if MERGED_DIR.exists():
+        shutil.rmtree(MERGED_DIR, ignore_errors=True)
+        print("  [✓] Deleted heavy merged dataset folder.")
+        
+    # 2. Delete raw downloads
+    if DOWNLOAD_DIR.exists():
+        shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
+        print("  [✓] Deleted raw dataset ZIPs and extracted folders.")
+        
+    # 3. Delete PyTorch weights from ALL run folders (keep the graphs!)
+    if RUNS_DIR.exists():
+        for run_folder in RUNS_DIR.iterdir():
+            if run_folder.is_dir():
+                weights_dir = run_folder / "weights"
+                if weights_dir.exists():
+                    shutil.rmtree(weights_dir, ignore_errors=True)
+                    print(f"  [✓] Deleted massive .pt weights from {run_folder.name}")
+
 if __name__ == "__main__":
     merge_datasets()
     best_weights = train_model()
     export_onnx(best_weights)
+    cleanup_space()
