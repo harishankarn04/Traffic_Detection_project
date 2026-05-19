@@ -39,29 +39,65 @@ RUNS_DIR = BASE_DIR / "runs"
 # 2. MERGE & REMAP CLASSES
 # =====================================================================
 def create_class_mapping(foreign_classes):
-    """Maps the foreign dataset's classes to our universal ATCS IDs."""
+    """
+    Maps the foreign dataset's classes to our universal ATCS IDs.
+    Priority ordering ensures specific classes (auto_rickshaw, ambulance)
+    are checked BEFORE the generic 'car/vehicle' catch-all.
+    Critical fix: 'vehicle' previously mapped everything to 'car', including autos.
+    """
     mapping = {}
-    
-    # Reverse lookup for universal map
     universal_name_to_id = {v: k for k, v in UNIVERSAL_CLASS_MAP.items()}
-    
+
     for foreign_id, foreign_name in enumerate(foreign_classes):
-        name = foreign_name.lower().replace("-", "_").replace(" ", "_")
-        
-        # Heuristics to catch common variations
-        if "car" in name or "vehicle" in name: target = "car"
-        elif "bus" in name: target = "bus"
-        elif "truck" in name or "lorry" in name: target = "truck"
-        elif "bike" in name or "motorcycle" in name or "two-wheeler" in name: target = "motorcycle"
-        elif "auto" in name or "rickshaw" in name: target = "auto_rickshaw"
-        elif "ambulance" in name: target = "ambulance"
-        elif "fire" in name: target = "fire_truck"
+        name = foreign_name.lower().strip().replace("-", "_").replace(" ", "_")
+        target = None
+
+        # Priority 1: Emergency vehicles (before 'truck' which could false-match)
+        if any(k in name for k in ["ambulance"]):
+            target = "ambulance"
+        elif any(k in name for k in ["fire_truck", "fire_engine", "firetruck", "fire"]):
+            target = "fire_truck"
+
+        # Priority 2: Auto-Rickshaw (BEFORE 'car/vehicle' catch-all!)
+        elif any(k in name for k in [
+            "auto_rickshaw", "autorickshaw", "rickshaw", "tuk_tuk",
+            "tuktuk", "three_wheeler", "threewheeler", "tempo", "e_rickshaw"
+        ]) or name in ["auto", "rick", "rik"]:
+            target = "auto_rickshaw"
+
+        # Priority 3: Bus
+        elif any(k in name for k in ["bus", "minibus", "mini_bus", "coach"]):
+            target = "bus"
+
+        # Priority 4: Truck/Van (before generic 'car')
+        elif any(k in name for k in [
+            "truck", "lorry", "van", "pickup", "mini_truck",
+            "minitruck", "goods_vehicle"
+        ]):
+            target = "truck"
+
+        # Priority 5: Motorcycle / Two-wheelers (comprehensive aliases)
+        elif any(k in name for k in [
+            "motorcycle", "motorbike", "scooter", "moped", "scooty",
+            "two_wheeler", "twowheeler", "motor_cycle"
+        ]) or name in ["bike", "moto", "motorbike"]:
+            target = "motorcycle"
+        elif "bike" in name and "dirt" not in name:  # catches 'bike', 'e-bike' etc.
+            target = "motorcycle"
+
+        # Priority 6: Car — LAST, generic catch-all
+        elif any(k in name for k in [
+            "car", "sedan", "suv", "hatchback", "jeep",
+            "taxi", "cab", "vehicle", "automobile"
+        ]):
+            target = "car"
+
         else:
-            continue # Unknown class, discard
-            
+            continue  # Unknown class, discard
+
         if target in universal_name_to_id:
             mapping[foreign_id] = universal_name_to_id[target]
-            
+
     return mapping
 
 def merge_datasets():
