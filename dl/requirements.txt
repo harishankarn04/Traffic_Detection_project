@@ -5,3 +5,4 @@ onnxruntime>=1.16
 yt-dlp
 roboflow
 PyYAML
+colorama

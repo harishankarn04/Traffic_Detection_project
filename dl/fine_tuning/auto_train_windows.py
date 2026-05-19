@@ -5,6 +5,10 @@ import yaml
 import zipfile
 from roboflow import Roboflow
 from ultralytics import YOLO
+import colorama
+
+# Fix for tqdm carriage returns flooding Windows Command Prompt
+colorama.init()
 
 # =====================================================================
 # 🛠️ USER CONFIGURATION
