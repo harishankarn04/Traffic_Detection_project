@@ -118,7 +118,7 @@ def run_yolo(sess, frame):
         if score > CONF_THRESH:
             # COCO vehicle classes: 2=car, 3=motorcycle, 5=bus, 7=truck
             # (adjust if your custom model has different class IDs)
-            if class_id in [0, 1, 2, 3, 5, 7]: # added 0,1 just in case custom model is 0=car
+            if class_id in [0, 1, 2, 3, 4, 5, 6, 7]: # include auto_rickshaw (4), ambulance (5), fire_truck (6)
                 boxes.append(row[:4])
                 scores.append(float(score))
                 class_ids_list.append(class_id)
@@ -150,7 +150,7 @@ def run_yolo(sess, frame):
                 # Map class ID to name
                 cid = class_ids_list[i]
                 # Fallback to COCO names if it's the base model, or Custom names if it's the fine-tuned model
-                class_names = {0: "Car", 1: "Bus", 2: "Truck", 3: "Motorcycle", 4: "Auto-Rickshaw", 5: "Bus", 7: "Truck"}
+                class_names = {0: "Car", 1: "Bus", 2: "Truck", 3: "Motorcycle", 4: "Auto-Rickshaw", 5: "Ambulance", 6: "Fire-Truck", 7: "Truck"}
                 label = class_names.get(cid, "Vehicle")
                 
                 # Draw the Accuracy/Confidence value + Label
